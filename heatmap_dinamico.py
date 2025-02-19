@@ -1,58 +1,52 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import json
+import plotly.graph_objects as go
 
-# Configuración de la página
-st.set_page_config(layout="wide")
-st.title("Mapa de Calor de Colombia 🇨🇴")
+# Datos básicos de ejemplo
+datos = {
+    'departamento': ['Antioquia', 'Cundinamarca', 'Valle del Cauca'],
+    'latitud': [6.2518, 4.6097, 3.4372],
+    'longitud': [-75.5636, -74.0817, -76.5225]
+    'valor': [100, 80, 90]
+}
 
-# Cargar el GeoJSON
-@st.cache_data
-def load_geojson():
-    with open("Colombia.geo.json") as f:
-        return json.load(f)
+# Crear el dataframe
+df = pd.DataFrame(datos)
 
-try:
-    # Subir archivo CSV
-    uploaded_file = st.file_uploader("Sube tu archivo CSV, mi amor", type=['csv'])
-    
-    if uploaded_file is not None:
-        # Leer datos
-        df = pd.read_csv(uploaded_file)
-        
-        # Cargar GeoJSON
-        geojson = load_geojson()
-        
-        # Selector de columna para el mapa de calor
-        valor_columna = st.selectbox(
-            "¿Qué datos querés mostrar en el mapa?",
-            df.select_dtypes(include=['float64', 'int64']).columns
-        )
-        
-        # Crear mapa
-        fig = px.choropleth(
-            df,
-            geojson=geojson,
-            locations='departamento',  # Columna con nombres de departamentos
-            featureidkey="properties.NOMBRE_DPT",
-            color=valor_columna,
-            color_continuous_scale="Viridis",
-            title=f"Mapa de calor: {valor_columna}"
-        )
-        
-        # Ajustar vista
-        fig.update_geos(
-            center=dict(lat=4.5709, lon=-74.2973),
-            projection_scale=3,
-            showcoastlines=True,
-            showland=True,
-            fitbounds="locations"
-        )
-        
-        # Mostrar mapa
-        st.plotly_chart(fig, use_container_width=True)
+# Título de la página
+st.title('Mapa Básico de Colombia 🇨🇴')
 
-except Exception as e:
-    st.error(f"Ay parcera, algo salió mal: {str(e)}")
-    st.write("Revisá que tu CSV tenga una columna 'departamento' con los nombres bien escriticos")
+# Crear el mapa
+fig = go.Figure(go.Scattergeo(
+    lon = df['longitud'],
+    lat = df['latitud'],
+    text = df['departamento'],
+    mode = 'markers',
+    marker = dict(
+        size = 10,
+        color = df['valor'],
+        colorscale = 'Viridis',
+        showscale = True
+    )
+))
+
+# Configurar el mapa para Colombia
+fig.update_geos(
+    visible=True,
+    resolution=50,
+    scope='south america',
+    showcountries=True,
+    countrycolor="Black",
+    showsubunits=True,
+    showland=True,
+    landcolor="lightgray"
+)
+
+# Centrar en Colombia
+fig.update_geos(
+    center=dict(lat=4.5709, lon=-74.2973),
+    projection_scale=3
+)
+
+# Mostrar el mapa
+st.plotly_chart(fig)
