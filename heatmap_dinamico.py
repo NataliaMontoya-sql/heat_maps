@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 datos = {
     'departamento': ['Antioquia', 'Cundinamarca', 'Valle del Cauca'],
     'latitud': [6.2518, 4.6097, 3.4372],
-    'longitud': [-75.5636, -74.0817, -76.5225]
+    'longitud': [-75.5636, -74.0817, -76.5225],
     'valor': [100, 80, 90]
 }
 
