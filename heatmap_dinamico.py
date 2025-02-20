@@ -1,55 +1,108 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import folium
+from folium.plugins import HeatMap
+from streamlit_folium import folium_static
+import numpy as np
+from datetime import datetime
 
-# Configuración de la página
-st.set_page_config(layout="wide")
-st.title("Mapa de Calor de Colombia 🇨🇴")
+# Set page config
+st.set_page_config(page_title="Colombian Solar Radiation Heatmap", layout="wide")
 
-# Datos de ejemplo de departamentos (coordenadas aproximadas del centro de cada depto)
-datos_deptos = {
-    'departamento': [
-        'Antioquia', 'Cundinamarca', 'Valle del Cauca', 
-        'Atlántico', 'Santander', 'Bolívar'
-    ],
-    'latitud': [
-        6.2530, 4.6097, 3.4372,
-        10.6966, 6.6437, 8.6704
-    ],
-    'longitud': [
-        -75.5736, -74.0817, -76.5225,
-        -74.8741, -73.6535, -74.0300
-    ],
-    'valor': [100, 80, 90, 70, 85, 75]  # Valores de ejemplo
+# Load data
+@st.cache_data
+def load_data():
+    df = pd.read_csv("datos_unificados_completos.csv")
+    df['DATE'] = pd.to_datetime(df[['YEAR', 'MO', 'DY']].assign(
+        YEAR=df['YEAR'].astype(str),
+        MO=df['MO'].astype(str).str.zfill(2),
+        DY=df['DY'].astype(str).str.zfill(2)
+    ).agg('-'.join, axis=1))
+    return df
+
+# Load the data
+df = load_data()
+
+# Sidebar controls
+st.sidebar.header("Filters")
+
+# Year and month selection
+years = sorted(df['YEAR'].unique())
+selected_year = st.sidebar.selectbox('Select Year', years)
+
+months = sorted(df[df['YEAR'] == selected_year]['MO'].unique())
+selected_month = st.sidebar.selectbox('Select Month', months)
+
+# Metric selection
+metric_options = {
+    'ALLSKY_KT': 'Sky Clarity Index',
+    'ALLSKY_SFC_SW_DWN': 'Solar Radiation (kW/m²/day)'
 }
+selected_metric = st.sidebar.selectbox('Select Metric', list(metric_options.keys()), 
+                                     format_func=lambda x: metric_options[x])
 
-# Crear DataFrame
-df = pd.DataFrame(datos_deptos)
+# Filter data
+filtered_df = df[
+    (df['YEAR'] == selected_year) &
+    (df['MO'] == selected_month)
+].copy()
 
-# Crear el mapa
-fig = px.scatter_mapbox(
-    df, 
-    lat='latitud', 
-    lon='longitud',
-    color='valor',
-    size=[20]*len(df),  # Tamaño fijo para todos los puntos
-    hover_name='departamento',
-    color_continuous_scale='Viridis',
-    zoom=5,
-    mapbox_style='carto-positron',
-    center={'lat': 4.5709, 'lon': -74.2973},  # Centro en Colombia
-    title='Mapa de Calor por Departamentos'
+# Calculate average for the selected period
+agg_df = filtered_df.groupby(['LAT', 'LON'])[selected_metric].mean().reset_index()
+
+# Main content
+st.title("Colombian Solar Radiation Heatmap")
+st.subheader(f"{metric_options[selected_metric]} - {selected_year}/{selected_month}")
+
+# Create base map
+m = folium.Map(
+    location=[4.5709, -74.2973],  # Colombia center
+    zoom_start=6,
+    tiles="cartodbpositron"
 )
 
-# Ajustar el layout
-fig.update_layout(
-    margin={"r":0,"t":0,"l":0,"b":0},
-    height=600
+# Prepare data for heatmap
+heat_data = [[row['LAT'], row['LON'], row[selected_metric]] for index, row in agg_df.iterrows()]
+
+# Add heatmap layer
+HeatMap(
+    heat_data,
+    radius=15,
+    blur=10,
+    max_zoom=13,
+    gradient={0.2: 'blue', 0.4: 'lime', 0.6: 'yellow', 0.8: 'orange', 1: 'red'}
+).add_to(m)
+
+# Display map
+folium_static(m, width=1000, height=600)
+
+# Display statistics
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    st.metric(
+        "Average Value",
+        f"{agg_df[selected_metric].mean():.2f}"
+    )
+
+with col2:
+    max_location = agg_df.loc[agg_df[selected_metric].idxmax()]
+    st.metric(
+        "Maximum Value",
+        f"{max_location[selected_metric]:.2f}",
+        f"Lat: {max_location['LAT']:.2f}, Lon: {max_location['LON']:.2f}"
+    )
+
+with col3:
+    st.metric(
+        "Number of Measurements",
+        len(filtered_df)
+    )
+
+# Add a data table
+st.subheader("Raw Data Sample")
+st.dataframe(
+    filtered_df[['LAT', 'LON', 'DATE', selected_metric]]
+    .head(10)
+    .style.format({selected_metric: '{:.2f}'})
 )
-
-# Mostrar el mapa
-st.plotly_chart(fig, use_container_width=True)
-
-# Mostrar los datos en una tabla
-st.write("Datos por Departamento:")
-st.dataframe(df)
