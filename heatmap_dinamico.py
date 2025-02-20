@@ -7,7 +7,14 @@ st.set_page_config(layout="wide")
 st.title("Mapa de Calor de Colombia 🇨🇴")
 
 # Añadir el uploader de archivos
-uploaded_file = st.file_uploader("Subir archivo CSv", type=['csv'])
+uploaded_file = st.file_uploader("Subir archivo CSV", type=['csv'])
+
+# Función para validar coordenadas
+def validar_coordenadas(df):
+    if not all(df['latitud'].between(-4.23, 12.45) & df['longitud'].between(-79.00, -66.87)):
+        st.error("¡Uy parcera! Las coordenadas no están dentro del rango válido para Colombia.")
+        return False
+    return True
 
 # Función para procesar el CSV
 def procesar_csv(df):
@@ -15,6 +22,10 @@ def procesar_csv(df):
     columnas_requeridas = ['departamento', 'latitud', 'longitud']
     if not all(col in df.columns for col in columnas_requeridas):
         st.error("¡Uy parcera! Tu CSV debe tener las columnas: departamento, latitud y longitud")
+        return None
+    
+    # Validar coordenadas
+    if not validar_coordenadas(df):
         return None
     
     # Mostrar selector de columna para el valor del mapa de calor
@@ -55,17 +66,28 @@ else:
     st.info("👆 Subí tu CSV o mirá el ejemplo que armamos")
     df = pd.DataFrame(datos_ejemplo)
 
+# Filtrado de datos
+st.sidebar.header("Filtros")
+valor_min = st.sidebar.number_input("Valor mínimo", min_value=float(df['valor'].min()), max_value=float(df['valor'].max()), value=float(df['valor'].min()))
+valor_max = st.sidebar.number_input("Valor máximo", min_value=float(df['valor'].min()), max_value=float(df['valor'].max()), value=float(df['valor'].max()))
+df_filtrado = df[(df['valor'] >= valor_min) & (df['valor'] <= valor_max)]
+
+# Personalización del mapa
+st.sidebar.header("Personalización del Mapa")
+mapa_estilo = st.sidebar.selectbox("Estilo del Mapa", ["carto-positron", "open-street-map", "stamen-terrain"])
+escala_colores = st.sidebar.selectbox("Escala de Colores", ["Viridis", "Plasma", "Inferno", "Magma", "Cividis"])
+
 # Crear el mapa
 fig = px.scatter_mapbox(
-    df, 
+    df_filtrado, 
     lat='latitud', 
     lon='longitud',
     color='valor',
-    size=[20]*len(df),
+    size=[20]*len(df_filtrado),
     hover_name='departamento',
-    color_continuous_scale='Viridis',
+    color_continuous_scale=escala_colores.lower(),
     zoom=5,
-    mapbox_style='carto-positron',
+    mapbox_style=mapa_estilo,
     center={'lat': 4.5709, 'lon': -74.2973},
     title='Mapa de Calor por Departamentos'
 )
@@ -81,4 +103,15 @@ st.plotly_chart(fig, use_container_width=True)
 
 # Mostrar los datos en una tabla
 st.write("Datos que estamos usando:")
-st.dataframe(df)
+st.dataframe(df_filtrado)
+
+# Descargar datos procesados
+st.sidebar.header("Descargar Datos")
+if st.sidebar.button("Descargar CSV"):
+    csv = df_filtrado.to_csv(index=False)
+    st.sidebar.download_button(
+        label="Descargar CSV",
+        data=csv,
+        file_name='datos_procesados.csv',
+        mime='text/csv',
+    )
