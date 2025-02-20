@@ -11,7 +11,7 @@ uploaded_file = st.file_uploader("Subir archivo CSV", type=['csv'])
 
 # Función para validar coordenadas
 def validar_coordenadas(df):
-    if not all(df['latitud'].between(-4.23, 12.45) & df['longitud'].between(-79.00, -66.87)):
+    if not all(df['LAT'].between(-4.23, 12.45) & df['LON'].between(-79.00, -66.87)):
         st.error("¡Uy parcera! Las coordenadas no están dentro del rango válido para Colombia.")
         return False
     return True
@@ -19,9 +19,9 @@ def validar_coordenadas(df):
 # Función para procesar el CSV
 def procesar_csv(df):
     # Verificar las columnas necesarias
-    columnas_requeridas = ['departamento', 'latitud', 'longitud']
+    columnas_requeridas = ['LAT', 'LON', 'YEAR', 'MO', 'DY', 'ALLSKY_KT', 'ALLSKY_SFC_SW_DWN']
     if not all(col in df.columns for col in columnas_requeridas):
-        st.error("¡Uy parcera! Tu CSV debe tener las columnas: departamento, latitud y longitud")
+        st.error("¡Uy parcera! Tu CSV debe tener las columnas: LAT, LON, YEAR, MO, DY, ALLSKY_KT, ALLSKY_SFC_SW_DWN")
         return None
     
     # Validar coordenadas
@@ -30,7 +30,7 @@ def procesar_csv(df):
     
     # Mostrar selector de columna para el valor del mapa de calor
     columnas_numericas = df.select_dtypes(include=['float64', 'int64']).columns
-    columnas_numericas = [col for col in columnas_numericas if col not in ['latitud', 'longitud']]
+    columnas_numericas = [col for col in columnas_numericas if col not in ['LAT', 'LON']]
     
     if len(columnas_numericas) > 0:
         columna_valor = st.selectbox(
@@ -46,10 +46,13 @@ def procesar_csv(df):
 
 # Datos de ejemplo por si no se sube archivo
 datos_ejemplo = {
-    'departamento': ['Antioquia', 'Cundinamarca', 'Valle del Cauca'],
-    'latitud': [6.2530, 4.6097, 3.4372],
-    'longitud': [-75.5736, -74.0817, -76.5225],
-    'valor': [100, 80, 90]
+    'LAT': [6.2530, 4.6097, 3.4372],
+    'LON': [-75.5736, -74.0817, -76.5225],
+    'YEAR': [2020, 2021, 2022],
+    'MO': [1, 2, 3],
+    'DY': [15, 20, 25],
+    'ALLSKY_KT': [100, 80, 90],
+    'ALLSKY_SFC_SW_DWN': [200, 180, 190]
 }
 
 # Usar datos subidos o ejemplo
@@ -66,6 +69,26 @@ else:
     st.info("👆 Subí tu CSV o mirá el ejemplo que armamos")
     df = pd.DataFrame(datos_ejemplo)
 
+# Calcular media, mediana, latitud y longitud por departamento (en este caso, agrupamos por LAT y LON)
+if 'departamento' not in df.columns:
+    df['departamento'] = df.apply(lambda row: f"Punto ({row['LAT']}, {row['LON']})", axis=1)
+
+resumen_departamentos = df.groupby('departamento').agg({
+    'LAT': 'mean',
+    'LON': 'mean',
+    'ALLSKY_KT': ['mean', 'median'],
+    'ALLSKY_SFC_SW_DWN': ['mean', 'median']
+}).reset_index()
+
+# Renombrar columnas para mejor visualización
+resumen_departamentos.columns = ['Departamento', 'Latitud Media', 'Longitud Media', 
+                                 'Media ALLSKY_KT', 'Mediana ALLSKY_KT', 
+                                 'Media ALLSKY_SFC_SW_DWN', 'Mediana ALLSKY_SFC_SW_DWN']
+
+# Mostrar resumen de datos
+st.write("Resumen de datos por departamento (o punto geográfico):")
+st.dataframe(resumen_departamentos)
+
 # Filtrado de datos
 st.sidebar.header("Filtros")
 valor_min = st.sidebar.number_input("Valor mínimo", min_value=float(df['valor'].min()), max_value=float(df['valor'].max()), value=float(df['valor'].min()))
@@ -76,20 +99,21 @@ df_filtrado = df[(df['valor'] >= valor_min) & (df['valor'] <= valor_max)]
 st.sidebar.header("Personalización del Mapa")
 mapa_estilo = st.sidebar.selectbox("Estilo del Mapa", ["carto-positron", "open-street-map", "stamen-terrain"])
 escala_colores = st.sidebar.selectbox("Escala de Colores", ["Viridis", "Plasma", "Inferno", "Magma", "Cividis"])
+zoom_level = st.sidebar.slider("Nivel de Zoom", min_value=1, max_value=15, value=5)
 
 # Crear el mapa
 fig = px.scatter_mapbox(
     df_filtrado, 
-    lat='latitud', 
-    lon='longitud',
+    lat='LAT', 
+    lon='LON',
     color='valor',
     size=[20]*len(df_filtrado),
     hover_name='departamento',
     color_continuous_scale=escala_colores.lower(),
-    zoom=5,
+    zoom=zoom_level,
     mapbox_style=mapa_estilo,
     center={'lat': 4.5709, 'lon': -74.2973},
-    title='Mapa de Calor por Departamentos'
+    title='Mapa de Calor por Puntos Geográficos'
 )
 
 # Ajustar el layout
