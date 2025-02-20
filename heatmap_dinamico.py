@@ -1,108 +1,84 @@
 import streamlit as st
 import pandas as pd
-import folium
-from folium.plugins import HeatMap
-from streamlit_folium import folium_static
-import numpy as np
-from datetime import datetime
+import plotly.express as px
 
-# Set page config
-st.set_page_config(page_title="Colombian Solar Radiation Heatmap", layout="wide")
+# Configuración de la página
+st.set_page_config(layout="wide")
+st.title("Mapa de Calor de Colombia 🇨🇴")
 
-# Load data
-@st.cache_data
-def load_data():
-    df = pd.read_csv("datos_unificados_completos.csv")
-    df['DATE'] = pd.to_datetime(df[['YEAR', 'MO', 'DY']].assign(
-        YEAR=df['YEAR'].astype(str),
-        MO=df['MO'].astype(str).str.zfill(2),
-        DY=df['DY'].astype(str).str.zfill(2)
-    ).agg('-'.join, axis=1))
+# Añadir el uploader de archivos
+uploaded_file = st.file_uploader("Subir archivo CSv", type=['csv'])
+
+# Función para procesar el CSV
+def procesar_csv(df):
+    # Verificar las columnas necesarias
+    columnas_requeridas = ['departamento', 'latitud', 'longitud']
+    if not all(col in df.columns for col in columnas_requeridas):
+        st.error("¡Uy parcera! Tu CSV debe tener las columnas: departamento, latitud y longitud")
+        return None
+    
+    # Mostrar selector de columna para el valor del mapa de calor
+    columnas_numericas = df.select_dtypes(include=['float64', 'int64']).columns
+    columnas_numericas = [col for col in columnas_numericas if col not in ['latitud', 'longitud']]
+    
+    if len(columnas_numericas) > 0:
+        columna_valor = st.selectbox(
+            "¿Qué datos querés mostrar en el mapa?",
+            columnas_numericas
+        )
+        df['valor'] = df[columna_valor]
+    else:
+        st.error("Tu CSV debe tener al menos una columna numérica para el mapa de calor")
+        return None
+    
     return df
 
-# Load the data
-df = load_data()
-
-# Sidebar controls
-st.sidebar.header("Filters")
-
-# Year and month selection
-years = sorted(df['YEAR'].unique())
-selected_year = st.sidebar.selectbox('Select Year', years)
-
-months = sorted(df[df['YEAR'] == selected_year]['MO'].unique())
-selected_month = st.sidebar.selectbox('Select Month', months)
-
-# Metric selection
-metric_options = {
-    'ALLSKY_KT': 'Sky Clarity Index',
-    'ALLSKY_SFC_SW_DWN': 'Solar Radiation (kW/m²/day)'
+# Datos de ejemplo por si no se sube archivo
+datos_ejemplo = {
+    'departamento': ['Antioquia', 'Cundinamarca', 'Valle del Cauca'],
+    'latitud': [6.2530, 4.6097, 3.4372],
+    'longitud': [-75.5736, -74.0817, -76.5225],
+    'valor': [100, 80, 90]
 }
-selected_metric = st.sidebar.selectbox('Select Metric', list(metric_options.keys()), 
-                                     format_func=lambda x: metric_options[x])
 
-# Filter data
-filtered_df = df[
-    (df['YEAR'] == selected_year) &
-    (df['MO'] == selected_month)
-].copy()
+# Usar datos subidos o ejemplo
+if uploaded_file is not None:
+    try:
+        df = pd.read_csv(uploaded_file)
+        df = procesar_csv(df)
+        if df is None:
+            df = pd.DataFrame(datos_ejemplo)
+    except Exception as e:
+        st.error(f"Uy mor, hubo un error leyendo tu archivo: {str(e)}")
+        df = pd.DataFrame(datos_ejemplo)
+else:
+    st.info("👆 Subí tu CSV o mirá el ejemplo que armamos")
+    df = pd.DataFrame(datos_ejemplo)
 
-# Calculate average for the selected period
-agg_df = filtered_df.groupby(['LAT', 'LON'])[selected_metric].mean().reset_index()
-
-# Main content
-st.title("Colombian Solar Radiation Heatmap")
-st.subheader(f"{metric_options[selected_metric]} - {selected_year}/{selected_month}")
-
-# Create base map
-m = folium.Map(
-    location=[4.5709, -74.2973],  # Colombia center
-    zoom_start=6,
-    tiles="cartodbpositron"
+# Crear el mapa
+fig = px.scatter_mapbox(
+    df, 
+    lat='latitud', 
+    lon='longitud',
+    color='valor',
+    size=[20]*len(df),
+    hover_name='departamento',
+    color_continuous_scale='Viridis',
+    zoom=5,
+    mapbox_style='carto-positron',
+    center={'lat': 4.5709, 'lon': -74.2973},
+    title='Mapa de Calor por Departamentos'
 )
 
-# Prepare data for heatmap
-heat_data = [[row['LAT'], row['LON'], row[selected_metric]] for index, row in agg_df.iterrows()]
-
-# Add heatmap layer
-HeatMap(
-    heat_data,
-    radius=15,
-    blur=10,
-    max_zoom=13,
-    gradient={0.2: 'blue', 0.4: 'lime', 0.6: 'yellow', 0.8: 'orange', 1: 'red'}
-).add_to(m)
-
-# Display map
-folium_static(m, width=1000, height=600)
-
-# Display statistics
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.metric(
-        "Average Value",
-        f"{agg_df[selected_metric].mean():.2f}"
-    )
-
-with col2:
-    max_location = agg_df.loc[agg_df[selected_metric].idxmax()]
-    st.metric(
-        "Maximum Value",
-        f"{max_location[selected_metric]:.2f}",
-        f"Lat: {max_location['LAT']:.2f}, Lon: {max_location['LON']:.2f}"
-    )
-
-with col3:
-    st.metric(
-        "Number of Measurements",
-        len(filtered_df)
-    )
-
-# Add a data table
-st.subheader("Raw Data Sample")
-st.dataframe(
-    filtered_df[['LAT', 'LON', 'DATE', selected_metric]]
-    .head(10)
-    .style.format({selected_metric: '{:.2f}'})
+# Ajustar el layout
+fig.update_layout(
+    margin={"r":0,"t":0,"l":0,"b":0},
+    height=600
 )
+
+# Mostrar el mapa
+st.plotly_chart(fig, use_container_width=True)
+
+# Mostrar los datos en una tabla
+st.write("Datos que estamos usando:")
+st.dataframe(df)
