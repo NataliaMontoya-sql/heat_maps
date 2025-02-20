@@ -4,10 +4,10 @@ import plotly.express as px
 
 # Configuración de la página
 st.set_page_config(layout="wide")
-st.title("Mapa de Calor de Colombia 🇨🇴")
+st.title("🗺️ Mapa de Calor de Colombia")
 
 # Añadir el uploader de archivos
-uploaded_file = st.file_uploader("Subir archivo CSV", type=['csv'])
+uploaded_file = st.file_uploader("Ingresar archivo CSV", type=['csv'])
 
 # Función para validar y filtrar coordenadas
 def filtrar_coordenadas(df):
@@ -77,7 +77,7 @@ if uploaded_file is not None:
         st.error(f"Error: {str(e)}")
         df = pd.DataFrame(datos_ejemplo)
 else:
-    st.info("👆 Subí tu CSV o usa los datos de ejemplo")
+    st.info("👆 Carga tu CSV o usa los datos de ejemplo")
     df = pd.DataFrame(datos_ejemplo)
 
 # Asegurar que tenemos la columna 'valor'
@@ -92,4 +92,73 @@ except KeyError:
     st.error("Error crítico: No se pudo determinar el rango de valores")
     st.stop()
 
-# [El resto del código manteniendo los controles de zoom y visualización...]
+# Calcular media, mediana, latitud y longitud por departamento (en este caso, agrupamos por LAT y LON)
+if 'departamento' not in df.columns:
+    df['departamento'] = df.apply(lambda row: f"Punto ({row['LAT']}, {row['LON']})", axis=1)
+
+resumen_departamentos = df.groupby('departamento').agg({
+    'LAT': 'mean',
+    'LON': 'mean',
+    'ALLSKY_KT': ['mean', 'median'],
+    'ALLSKY_SFC_SW_DWN': ['mean', 'median']
+}).reset_index()
+
+# Renombrar columnas para mejor visualización
+resumen_departamentos.columns = ['Departamento', 'Latitud Media', 'Longitud Media', 
+                                 'Media ALLSKY_KT', 'Mediana ALLSKY_KT', 
+                                 'Media ALLSKY_SFC_SW_DWN', 'Mediana ALLSKY_SFC_SW_DWN']
+
+# Mostrar resumen de datos
+st.write("Resumen de datos por departamento (o punto geográfico):")
+st.dataframe(resumen_departamentos)
+
+# Filtrado de datos
+st.sidebar.header("Filtros")
+valor_min = st.sidebar.number_input("Valor mínimo", min_value=float(df['valor'].min()), max_value=float(df['valor'].max()), value=float(df['valor'].min()))
+valor_max = st.sidebar.number_input("Valor máximo", min_value=float(df['valor'].min()), max_value=float(df['valor'].max()), value=float(df['valor'].max()))
+df_filtrado = df[(df['valor'] >= valor_min) & (df['valor'] <= valor_max)]
+
+# Personalización del mapa
+st.sidebar.header("Personalización del Mapa")
+mapa_estilo = st.sidebar.selectbox("Estilo del Mapa", ["carto-positron", "open-street-map", "stamen-terrain"])
+escala_colores = st.sidebar.selectbox("Escala de Colores", ["Viridis", "Plasma", "Inferno", "Magma", "Cividis"])
+zoom_level = st.sidebar.slider("Nivel de Zoom", min_value=1, max_value=15, value=5)
+
+# Crear el mapa
+fig = px.scatter_mapbox(
+    df_filtrado, 
+    lat='LAT', 
+    lon='LON',
+    color='valor',
+    size=[20]*len(df_filtrado),
+    hover_name='departamento',
+    color_continuous_scale=escala_colores.lower(),
+    zoom=zoom_level,
+    mapbox_style=mapa_estilo,
+    center={'lat': 4.5709, 'lon': -74.2973},
+    title='Mapa de Calor por Puntos Geográficos'
+)
+
+# Ajustar el layout
+fig.update_layout(
+    margin={"r":0,"t":0,"l":0,"b":0},
+    height=600
+)
+
+# Mostrar el mapa
+st.plotly_chart(fig, use_container_width=True)
+
+# Mostrar los datos en una tabla
+st.write("Datos que estamos usando:")
+st.dataframe(df_filtrado)
+
+# Descargar datos procesados
+st.sidebar.header("Descargar Datos")
+if st.sidebar.button("Descargar CSV"):
+    csv = df_filtrado.to_csv(index=False)
+    st.sidebar.download_button(
+        label="Descargar CSV",
+        data=csv,
+        file_name='datos_procesados.csv',
+        mime='text/csv',
+    )
