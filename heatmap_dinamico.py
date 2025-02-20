@@ -78,7 +78,7 @@ except KeyError:
 st.write("Datos que estamos usando:")
 st.dataframe(df)
 
-# Crear el mapa
+# Crear el mapa con opacidad de los puntos
 fig = px.scatter_mapbox(
     df, 
     lat='LAT', 
@@ -93,19 +93,17 @@ fig = px.scatter_mapbox(
     title='Mapa de Calor por Puntos Geográficos'
 )
 
+# Ajustar la opacidad de los puntos
+fig.update_traces(marker=dict(opacity=0.45))
+
 # Ajustar el layout
 fig.update_layout(
     margin={"r":0,"t":0,"l":0,"b":0}, 
-    height=600, 
-    opacity=0.45
+    height=600
 )
 
 # Mostrar el mapa
 st.plotly_chart(fig, use_container_width=True)
-
-# Mostrar los datos en una tabla
-st.write("Datos que estamos usando:")
-st.dataframe(df)
 
 # Descargar datos procesados
 st.sidebar.header("Descargar Datos")
@@ -117,3 +115,4 @@ if st.sidebar.button("Descargar CSV"):
         file_name='datos_procesados.csv', 
         mime='text/csv'
     )
+
