@@ -61,6 +61,17 @@ def crear_mapa(df, zoom_level):
     fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=600)
     return fig
 
+# Función para obtener la región
+def get_region(lat, lon):
+    if lat > 8:
+        return "Costa Caribe"
+    elif lat < 2:
+        return "Sur"
+    elif lon < -75:
+        return "Pacífico"
+    else:
+        return "Andina"
+
 # Función para analizar y mostrar datos
 def analizar_datos(df):
     st.subheader("📊 Análisis Detallado")
@@ -132,6 +143,9 @@ zoom_level = st.sidebar.slider("Nivel de Zoom", 4, 15, 6)
 # Crear y mostrar el mapa
 fig = crear_mapa(df, zoom_level)
 st.plotly_chart(fig, use_container_width=True)
+
+# Llamar a la función para analizar y mostrar datos
+analizar_datos(df)
 
 # Mostrar datos en una tabla desplegable
 with st.expander("Ver datos"):
