@@ -120,6 +120,50 @@ def analizar_datos(df):
         if st.button("Descargar Informe Completo 📑"):
             st.info("¡Proximamente! Estamos armando un informe más completo 🚀")
 
+# Función para mostrar la comparativa histórica en el sidebar
+def mostrar_comparativa_historica(df):
+    st.sidebar.header("📅 Comparativa Histórica")
+    
+    # Selección de año
+    años_disponibles = df['YEAR'].unique()
+    año_seleccionado = st.sidebar.selectbox("Selecciona un año", años_disponibles)
+    
+    # Filtrar datos por año seleccionado
+    df_filtrado = df[df['YEAR'] == año_seleccionado]
+    
+    # Gráfico circular (pie chart) para ALLSKY_KT
+    st.sidebar.subheader("Distribución de ALLSKY_KT")
+    fig_pie_kt = px.pie(
+        df_filtrado, 
+        names='MO', 
+        values='ALLSKY_KT', 
+        title=f'Distribución de ALLSKY_KT en {año_seleccionado}'
+    )
+    st.sidebar.plotly_chart(fig_pie_kt, use_container_width=True)
+    
+    # Gráfico circular (pie chart) para ALLSKY_SFC_SW_DWN
+    st.sidebar.subheader("Distribución de ALLSKY_SFC_SW_DWN")
+    fig_pie_sw = px.pie(
+        df_filtrado, 
+        names='MO', 
+        values='ALLSKY_SFC_SW_DWN', 
+        title=f'Distribución de ALLSKY_SFC_SW_DWN en {año_seleccionado}'
+    )
+    st.sidebar.plotly_chart(fig_pie_sw, use_container_width=True)
+    
+    # Gráfico de línea para comparar ambas variables
+    st.sidebar.subheader("Comparación Mensual")
+    df_mensual = df_filtrado.groupby('MO')[['ALLSKY_KT', 'ALLSKY_SFC_SW_DWN']].mean().reset_index()
+    fig_line = px.line(
+        df_mensual, 
+        x='MO', 
+        y=['ALLSKY_KT', 'ALLSKY_SFC_SW_DWN'], 
+        title=f'Comparación Mensual en {año_seleccionado}',
+        labels={'value': 'Valor', 'MO': 'Mes'},
+        markers=True
+    )
+    st.sidebar.plotly_chart(fig_line, use_container_width=True)
+
 # Cargar datos
 uploaded_file = st.file_uploader("📄 Ingresar archivo CSV", type=['csv'])
 if uploaded_file is not None:
