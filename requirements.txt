@@ -5,3 +5,4 @@ folium
 numpy
 datetime
 kaleido
+matplotlib
