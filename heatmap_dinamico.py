@@ -107,18 +107,18 @@ def analizar_datos(df):
         st.write("""
         💫 **Hallazgos Principales:**
         1. **Zonas Más Prometedoras:**
-           - La región con más potencial es [región con mayor promedio]
-           - Encontramos puntos súper pilos en [coordenadas específicas]
+           - La región con más potencial energético es [región con mayor promedio]
+           - Puntos de potencial energético prometedor [coordenadas específicas]
         2. **Recomendaciones:**
-           - Los mejores lugares pa' montar parques solares están en [áreas específicas]
-           - La época del año más chimba pa' aprovechar es [temporada]
+           - Mejores lugares montar parques solares están en [áreas específicas]
+           - La mejor temporada del año para aprovechar es [temporada]
         3. **Consideraciones Importantes:**
            - Hay que tener en cuenta la variabilidad del clima
            - Es importante revisar la infraestructura cercana
            - Se debe considerar el acceso a las zonas
         """)
         if st.button("Descargar Informe Completo 📑"):
-            st.info("¡Proximamente! Estamos armando un informe más completico 🚀")
+            st.info("¡Proximamente! Estamos armando un informe más completo 🚀")
 
 # Cargar datos
 uploaded_file = st.file_uploader("📄 Ingresar archivo CSV", type=['csv'])
@@ -133,7 +133,7 @@ if uploaded_file is not None:
         st.error(f"Error: {str(e)}")
         df = cargar_datos_ejemplo()
 else:
-    st.info("👆 Carga tu CSV o usa los datos de ejemplo")
+    st.info("👆 Carga tu archivo CSV")
     df = cargar_datos_ejemplo()
 
 # Control de zoom
@@ -158,7 +158,7 @@ if st.sidebar.button("Descargar CSV"):
     st.sidebar.download_button(label="Descargar CSV", data=csv, file_name='datos_procesados.csv', mime='text/csv')
 
 # Botón para descargar el mapa como PNG
-st.sidebar.header("¡Llevate el mapa pa' la casa! 📸")
+st.sidebar.header("¡Lleva un mapa contigo! 📸")
 if st.sidebar.button("Descargar Mapa como PNG"):
     fig.write_image("mapa_temporal.png", scale=2)
     with open("mapa_temporal.png", "rb") as file:
