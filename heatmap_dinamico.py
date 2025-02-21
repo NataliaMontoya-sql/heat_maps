@@ -24,20 +24,14 @@ def filtrar_coordenadas(df):
 
 # Función para procesar el CSV
 def procesar_csv(df):
-    # Verificar columnas obligatorias
     columnas_requeridas = ['LAT', 'LON', 'YEAR', 'MO', 'DY', 'ALLSKY_KT', 'ALLSKY_SFC_SW_DWN']
     if not all(col in df.columns for col in columnas_requeridas):
         st.error("Faltan columnas requeridas en el CSV")
         return None
-
-    # Filtrar coordenadas
     df = filtrar_coordenadas(df)
     if df is None:
         return None
-
-    # Seleccionar las columnas que nos interesan
     df = df[['LAT', 'LON', 'ALLSKY_KT', 'ALLSKY_SFC_SW_DWN']]
-    
     return df
 
 # Datos de ejemplo mejorados
@@ -66,44 +60,44 @@ else:
     st.info("👆 Carga tu CSV o usa los datos de ejemplo")
     df = pd.DataFrame(datos_ejemplo)
 
-# Filtrado seguro de valores
-try:
-    valor_min = float(df['ALLSKY_KT'].min())
-    valor_max = float(df['ALLSKY_KT'].max())
-except KeyError:
-    st.error("Error crítico: No se pudo determinar el rango de valores")
-    st.stop()
+# Agregar control de zoom en la barra lateral
+st.sidebar.header("Controles del Mapa")
+zoom_level = st.sidebar.slider("Nivel de Zoom", 4, 15, 6)
 
-# Mostrar los datos en una tabla
-st.write("Datos que estamos usando:")
-st.dataframe(df)
-
-# Crear el mapa con opacidad de los puntos
+# Crear el mapa con los nuevos ajustes
 fig = px.scatter_mapbox(
     df, 
     lat='LAT', 
     lon='LON', 
-    color='ALLSKY_KT', 
-    size=[17]*len(df), 
-    hover_name='LAT', 
-    color_continuous_scale='plasma', 
-    zoom=10, 
-    mapbox_style='open-street-map', 
-    center={'lat': 4.5709, 'lon': -74.2973}, 
+    color='ALLSKY_KT',
+    size=[3]*len(df),  # Puntos más pequeños
+    hover_name='LAT',
+    color_continuous_scale='plasma',
+    zoom=zoom_level,  # Zoom controlado por el slider
+    mapbox_style='open-street-map',
+    center={'lat': 4.5709, 'lon': -74.2973},
     title='Mapa de Calor por Puntos Geográficos'
 )
 
-# Ajustar la opacidad de los puntos
+# Ajustar la opacidad de los puntos al 45%
 fig.update_traces(marker=dict(opacity=0.45))
 
-# Ajustar el layout
+# Ajustar el layout y agregar la barra de zoom
 fig.update_layout(
-    margin={"r":0,"t":0,"l":0,"b":0}, 
-    height=600
+    margin={"r":0,"t":0,"l":0,"b":0},
+    height=600,
+    mapbox=dict(
+        style='open-street-map',
+        zoom=zoom_level
+    )
 )
 
 # Mostrar el mapa
 st.plotly_chart(fig, use_container_width=True)
+
+# Mostrar los datos en una tabla desplegable
+with st.expander("Ver datos"):
+    st.dataframe(df)
 
 # Descargar datos procesados
 st.sidebar.header("Descargar Datos")
@@ -111,8 +105,7 @@ if st.sidebar.button("Descargar CSV"):
     csv = df.to_csv(index=False)
     st.sidebar.download_button(
         label="Descargar CSV", 
-        data=csv, 
-        file_name='datos_procesados.csv', 
+        data=csv,
+        file_name='datos_procesados.csv',
         mime='text/csv'
     )
-
