@@ -95,6 +95,189 @@ fig.update_layout(
 # Mostrar el mapa
 st.plotly_chart(fig, use_container_width=True)
 
+# Creamos las pestañitas pa' todo el análisis
+st.header("📊 Análisis Detallado")
+tab1, tab2, tab3 = st.tabs([
+    "📈 Zonas con Mayor Radiación",
+    "🌞 Potencial para Parques Solares",
+    "📝 Conclusiones"
+])
+
+with tab1:
+    st.subheader("Análisis de Zonas con Mayor Radiación Solar")
+    
+    # Análisis general
+    with st.expander("Ver Análisis General"):
+        # Top 5 zonas con mayor radiación
+        top_zonas = df.nlargest(5, 'ALLSKY_SFC_SW_DWN')
+        st.write("Top 5 Zonas con Mayor Radiación:")
+        st.dataframe(top_zonas[['LAT', 'LON', 'ALLSKY_SFC_SW_DWN']])
+        
+        # Promedio por región
+        st.write("Promedio de Radiación por Región:")
+        # Definimos regiones básicas de Colombia
+        def get_region(lat, lon):
+            if lat > 8:
+                return "Costa Caribe"
+            elif lat < 2:
+                return "Sur"
+            elif lon < -75:
+                return "Pacífico"
+            else:
+                return "Andina"
+        
+        df['Region'] = df.apply(lambda x: get_region(x['LAT'], x['LON']), axis=1)
+        region_avg = df.groupby('Region')['ALLSKY_SFC_SW_DWN'].mean().sort_values(ascending=False)
+        st.bar_chart(region_avg)
+
+with tab1:
+    st.subheader("📊 Análisis por Temporadas")
+    
+    # Análisis por meses
+    df['Mes'] = df['MO'].map({
+        1: 'Enero', 2: 'Febrero', 3: 'Marzo',
+        4: 'Abril', 5: 'Mayo', 6: 'Junio',
+        7: 'Julio', 8: 'Agosto', 9: 'Septiembre',
+        10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+    })
+    
+    # Agregamos las temporadas del año
+    df['Temporada'] = df['MO'].apply(lambda x: 
+        'Temporada Seca' if x in [12, 1, 2, 6, 7, 8] 
+        else 'Temporada de Lluvia')
+    
+    # Gráfico de radiación por mes
+    st.write("### Radiación Solar por Mes 🌞")
+    monthly_radiation = df.groupby('Mes')['ALLSKY_SFC_SW_DWN'].mean()
+    st.line_chart(monthly_radiation)
+    
+    # Análisis por temporadas
+    st.write("### Comportamiento por Temporadas ☔️")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        season_avg = df.groupby('Temporada')['ALLSKY_SFC_SW_DWN'].mean()
+        st.bar_chart(season_avg)
+    
+    with col2:
+        st.write("""
+        **¿Qué nos dice esto, mi amor?**
+        - En temporada seca la radiación está más percha 🌞
+        - En temporada de lluvia baja un tris, pero igual sirve 🌧️
+        """)
+    
+    # Análisis de variabilidad
+    st.write("### Estabilidad de la Radiación 📈")
+    variability = df.groupby('Mes')['ALLSKY_SFC_SW_DWN'].agg(['mean', 'std'])
+    variability['cv'] = variability['std'] / variability['mean']
+    
+    # Gráfico de variabilidad
+    import plotly.express as px
+    fig_var = px.bar(
+        variability.reset_index(),
+        x='Mes',
+        y='cv',
+        title='Variabilidad de la Radiación por Mes'
+    )
+    st.plotly_chart(fig_var)
+
+    # Mejores zonas por temporada
+    st.write("### Mejores Zonas según la Época 🗺️")
+    for temporada in df['Temporada'].unique():
+        with st.expander(f"Ver mejores zonas en {temporada}"):
+            temp_data = df[df['Temporada'] == temporada]
+            top_zones = temp_data.nlargest(3, 'ALLSKY_SFC_SW_DWN')
+            
+            st.write(f"Top 3 Zonas pa' {temporada}:")
+            for idx, row in top_zones.iterrows():
+                st.metric(
+                    f"Zona {idx + 1}",
+                    f"Lat: {row['LAT']:.2f}, Lon: {row['LON']:.2f}",
+                    f"Radiación: {row['ALLSKY_SFC_SW_DWN']:.2f}"
+                )
+
+# Y en la segunda pestaña, le metemos este análisis más completico:
+with tab2:
+    st.write("### Análisis Avanzado de Ubicaciones 🎯")
+    
+    # Criterios de evaluación detallados
+    evaluation_criteria = {
+        'Radiación Solar': df['ALLSKY_SFC_SW_DWN'].max(),
+        'Claridad del Cielo': df['ALLSKY_KT'].max(),
+        'Estabilidad': -df.groupby(['LAT', 'LON'])['ALLSKY_SFC_SW_DWN'].std().mean()
+    }
+    
+    # Gráfico de radar para mejores ubicaciones
+    import plotly.graph_objects as go
+    
+    fig_radar = go.Figure()
+    top_locations = df.nlargest(3, 'Viabilidad')
+    
+    for idx, row in top_locations.iterrows():
+        fig_radar.add_trace(go.Scatterpolar(
+            r=[row['ALLSKY_SFC_SW_DWN'], row['ALLSKY_KT'], 
+               -df.groupby(['LAT', 'LON'])['ALLSKY_SFC_SW_DWN'].std().loc[row['LAT'], row['LON']]],
+            theta=['Radiación', 'Claridad', 'Estabilidad'],
+            name=f'Ubicación {idx + 1}'
+        ))
+    
+    fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 1])))
+    st.plotly_chart(fig_radar)
+
+with tab2:
+    st.subheader("Zonas Óptimas para Parques Solares")
+    
+    # Criterios para parques solares
+    with st.expander("Criterios de Evaluación"):
+        st.write("""
+        Pa' determinar las mejores zonas, analizamos:
+        - Radiación solar promedio ☀️
+        - Claridad del cielo 🌤️
+        - Estabilidad en mediciones 📊
+        """)
+    
+    # Calcular índice de viabilidad
+    df['Viabilidad'] = (
+        df['ALLSKY_SFC_SW_DWN'] * 0.6 +  # Peso mayor a la radiación
+        df['ALLSKY_KT'] * 0.4  # Peso menor a la claridad
+    )
+    
+    # Mostrar mejores ubicaciones
+    top_lugares = df.nlargest(3, 'Viabilidad')
+    st.write("Top 3 Ubicaciones Recomendadas:")
+    for idx, row in top_lugares.iterrows():
+        st.metric(
+            f"Ubicación {idx + 1}",
+            f"Lat: {row['LAT']:.2f}, Lon: {row['LON']:.2f}",
+            f"Viabilidad: {row['Viabilidad']:.2f}"
+        )
+
+with tab3:
+    st.subheader("Conclusiones del Análisis")
+    
+    # Conclusiones generales
+    st.write("""
+    💫 **Hallazgos Principales:**
+    
+    1. **Zonas Más Prometedoras:**
+       - La región con más potencial es [región con mayor promedio]
+       - Encontramos puntos súper pilos en [coordenadas específicas]
+    
+    2. **Recomendaciones:**
+       - Los mejores lugares pa' montar parques solares están en [áreas específicas]
+       - La época del año más chimba pa' aprovechar es [temporada]
+    
+    3. **Consideraciones Importantes:**
+       - Hay que tener en cuenta la variabilidad del clima
+       - Es importante revisar la infraestructura cercana
+       - Se debe considerar el acceso a las zonas
+    """)
+
+    # Botón pa' descargar el informe completo
+    if st.button("Descargar Informe Completo 📑"):
+        # Aquí podemos generar un PDF o un archivo más detallado
+        st.info("¡Proximamente! Estamos armando un informe más completico 🚀")
+
 # Mostrar los datos en una tabla desplegable
 with st.expander("Ver datos"):
     st.dataframe(df)
