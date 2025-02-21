@@ -4,4 +4,4 @@ plotly
 folium
 numpy
 datetime
-
+kaleido
