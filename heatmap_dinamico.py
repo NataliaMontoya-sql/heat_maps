@@ -109,3 +109,19 @@ if st.sidebar.button("Descargar CSV"):
         file_name='datos_procesados.csv',
         mime='text/csv'
     )
+
+
+# Botón para descargar el mapa como PNG
+st.sidebar.header("¡Llevate el mapa pa' la casa! 📸")
+if st.sidebar.button("Descargar Mapa como PNG"):
+    # Guardamos ese visaje temporalmente
+    fig.write_image("mapa_temporal.png", scale=2)  # scale=2 para que quede HD
+    
+    # Leemos el archivo para descargarlo
+    with open("mapa_temporal.png", "rb") as file:
+        btn = st.sidebar.download_button(
+            label="¡Bajate el mapa! 🗺️",
+            data=file,
+            file_name="mapa_calor_colombia.png",
+            mime="image/png"
+        )
