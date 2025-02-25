@@ -1,7 +1,8 @@
-pandas
 streamlit
+pandas
 plotly
-pydeck
+folium
 seaborn
 matplotlib
-numpy
+branca
+streamlit-folium
