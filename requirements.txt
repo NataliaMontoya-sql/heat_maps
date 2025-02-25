@@ -4,3 +4,4 @@ plotly
 pydeck
 seaborn
 matplotlib
+numpy
