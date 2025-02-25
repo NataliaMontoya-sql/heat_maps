@@ -130,34 +130,41 @@ if menu == "Datos":
 
 elif menu == "Inicio":
     st.subheader("🌅 Bienvenidos a Proyecto Solaris")
-    st.image("paneles_solares.png", width=200)  # Reemplaza "logo.png" con la ruta a tu imagen, si tienes alguna.
-    st.markdown(
-        """
-        Proyecto Solaris es un dashboard interactivo que identifica y visualiza las zonas de mayor potencial para parques solares en Colombia.  
-        Nuestro objetivo es impulsar el desarrollo de energía limpia y contribuir a un futuro sostenible.
-        """
-    )
-    st.markdown("---")  # Divisor horizontal
+    # Dividir en dos columnas: 3 partes para contenido y 1 para la imagen
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.markdown(
+            """
+            Proyecto Solaris es un dashboard interactivo que identifica y visualiza las zonas de mayor potencial para parques solares en Colombia.  
+            Nuestro objetivo es impulsar el desarrollo de energía limpia y contribuir a un futuro sostenible.
+            """
+        )
+        st.markdown("---")
+        st.markdown(
+            """
+            ### ¿Qué encontrarás en este dashboard?
+            - **📄 Tabla de datos:**  
+              Visualiza y explora la información recopilada en un formato tabular.
+            - **🗺️ Valores por ubicación en el mapa:**  
+              Consulta detalles geográficos y climáticos de cada zona.
+            - **☀️ Mapa de irradiación:**  
+              Observa la radiación solar distribuida a lo largo del territorio.
+            - **⛅ Mapas de datos climáticos:**  
+              Accede a mapas interactivos de humedad, precipitación y temperatura.
+            - **📈 Diagrama de barras de zonas geográficas:**  
+              Analiza comparativamente las variables climáticas por región.
+            - **🔡 Matriz de correlación:**  
+              Comprende la relación entre las distintas variables climáticas.
+            - **🪢 Mapa con percentiles de irradiación:**  
+              Destaca las zonas con los valores más altos y bajos de irradiación.
+            """
+        )
+    
+    with col2:
+        # Coloca la imagen en la "barra lateral derecha"
+        st.image("paneles_solares.png", use_column_width=True)
 
-    st.markdown(
-        """
-        ### ¿Qué encontrarás en este dashboard?
-        - **📄 Tabla de datos:**  
-          Visualiza y explora la información recopilada en un formato tabular.
-        - **🗺️ Valores por ubicación en el mapa:**  
-          Consulta detalles geográficos y climáticos de cada zona.
-        - **☀️ Mapa de irradiación:**  
-          Observa la radiación solar distribuida a lo largo del territorio.
-        - **⛅ Mapas de datos climáticos:**  
-          Accede a mapas interactivos de humedad, precipitación y temperatura.
-        - **📈 Diagrama de barras de zonas geográficas:**  
-          Analiza comparativamente las variables climáticas por región.
-        - **🔡 Matriz de correlación:**  
-          Comprende la relación entre las distintas variables climáticas.
-        - **🪢 Mapa con percentiles de irradiación:**  
-          Destaca las zonas con los valores más altos y bajos de irradiación.
-        """
-    )
 
 elif menu == "Visualización":
     st.subheader("📊 Visualización datos climáticos")
