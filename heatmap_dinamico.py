@@ -130,7 +130,7 @@ if menu == "Datos":
 
 elif menu == "Inicio":
     st.subheader("🌅 Bienvenidos a Proyecto Solaris")
-    st.image("logo.png", width=200)  # Reemplaza "logo.png" con la ruta a tu imagen, si tienes alguna.
+    st.image("paneles_solares.png", width=200)  # Reemplaza "logo.png" con la ruta a tu imagen, si tienes alguna.
     st.markdown(
         """
         Proyecto Solaris es un dashboard interactivo que identifica y visualiza las zonas de mayor potencial para parques solares en Colombia.  
