@@ -163,7 +163,7 @@ elif menu == "Inicio":
     
     with col2:
         # Coloca la imagen en la "barra lateral derecha"
-        st.image("paneles_solares.png", use_column_width=True)
+        st.image("paneles_solares.png", use_container_width=True)
 
 
 elif menu == "Visualización":
