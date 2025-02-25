@@ -8,7 +8,7 @@ from streamlit_folium import st_folium
 from branca.element import Template, MacroElement
 
 # Configuración de la página de Streamlit
-st.set_page_config(page_title="Proyecto Solaris", page_icon="", layout="wide")
+st.set_page_config(page_title="☀️ Proyecto Solaris", page_icon="", layout="wide")
 st.title("Proyecto Solaris")
 st.sidebar.title("Opciones de Navegación")
 
@@ -129,20 +129,33 @@ if menu == "Datos":
     st.dataframe(df_all.head(100))
 
 elif menu == "Inicio":
-    st.subheader("🌅 Bienvenidos!")
-    st.text("En este dashboard se identifica y visualiza las zonas de mayor potencial para la ubicación de parques solares en Colombia,")
-    st.text("con el objetivo de impulsar el desarrollo de energía limpia y contribuir a un futuro sostenible.")
+    st.subheader("🌅 Bienvenidos a Proyecto Solaris")
+    st.image("logo.png", width=200)  # Reemplaza "logo.png" con la ruta a tu imagen, si tienes alguna.
     st.markdown(
         """
-**El dashboard se divide en las siguientes secciones:**
+        Proyecto Solaris es un dashboard interactivo que identifica y visualiza las zonas de mayor potencial para parques solares en Colombia.  
+        Nuestro objetivo es impulsar el desarrollo de energía limpia y contribuir a un futuro sostenible.
+        """
+    )
+    st.markdown("---")  # Divisor horizontal
 
-- 📄 Tabla de datos
-- 🗺️ Valores por ubicación en el mapa
-- ☀️ Mapa de irradiación
-- ⛅ Mapas de datos climáticos
-- 📈 Diagrama de barras de zonas geográficas
-- 🔡 Matriz de correlación de las variables
-- 🪢 Mapa con percentiles de irradiación
+    st.markdown(
+        """
+        ### ¿Qué encontrarás en este dashboard?
+        - **📄 Tabla de datos:**  
+          Visualiza y explora la información recopilada en un formato tabular.
+        - **🗺️ Valores por ubicación en el mapa:**  
+          Consulta detalles geográficos y climáticos de cada zona.
+        - **☀️ Mapa de irradiación:**  
+          Observa la radiación solar distribuida a lo largo del territorio.
+        - **⛅ Mapas de datos climáticos:**  
+          Accede a mapas interactivos de humedad, precipitación y temperatura.
+        - **📈 Diagrama de barras de zonas geográficas:**  
+          Analiza comparativamente las variables climáticas por región.
+        - **🔡 Matriz de correlación:**  
+          Comprende la relación entre las distintas variables climáticas.
+        - **🪢 Mapa con percentiles de irradiación:**  
+          Destaca las zonas con los valores más altos y bajos de irradiación.
         """
     )
 
