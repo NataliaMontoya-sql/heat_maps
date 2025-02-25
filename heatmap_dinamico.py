@@ -72,13 +72,13 @@ def agregar_leyenda(mapa, titulo, items):
     macro._template = template
     mapa.get_root().add_child(macro)
 
-# Modificamos la función para recibir un parámetro de zoom
-def crear_mapa_clima(df, columna, titulo, zoom=6):
+# Función para crear mapas climáticos con leyenda
+def crear_mapa_clima(df, columna, titulo):
     q75 = df[columna].quantile(0.75)
     q50 = df[columna].quantile(0.5)
     max_row = df.loc[df[columna].idxmax()]
     map_center = [max_row["LAT"], max_row["LON"]]
-    mapa = folium.Map(location=map_center, zoom_start=zoom)
+    mapa = folium.Map(location=map_center, zoom_start=6)
     
     for _, row in df.iterrows():
         valor = row[columna]
@@ -129,17 +129,18 @@ if menu == "Datos":
     st.dataframe(df_all.head(100))
 
 elif menu == "Inicio":
-    st.subheader("¡Bienvenidos!")
-    st.text("En este dashboard se identifica y visualiza las zonas de mayor potencial para la ubicación de parques solares en Colombia, con el objetivo de impulsar el desarrollo de energía limpia y contribuir a un futuro sostenible.")
+    st.subheader("🌅 Bienvenidos!")
+    st.text("En este dashboard se identifica y visualiza las zonas de mayor potencial para la ubicación de parques solares en Colombia,")
+    st.text}("con el objetivo de impulsar el desarrollo de energía limpia y contribuir a un futuro sostenible.")
     st.markdown(""" 
     El dashboard se divide en las siguientes secciones:
-    - Tabla de datos
-    - Valores por ubicación en el mapa
-    - Mapa de irradiación
-    - Mapas de datos climáticos
-    - Diagrama de barras de zonas geográficas
-    - Matriz de correlación de las variables
-    - Mapa con percentiles de irradiación
+        📄 Tabla de datos
+        🗺️ Valores por ubicación en el mapa
+        ☀️ Mapa de irradiación
+        ⛅ Mapas de datos climáticos
+        📈 Diagrama de barras de zonas geográficas
+        🔡 Matriz de correlación de las variables
+        🪢 Mapa con percentiles de irradiación
     """)
 
 elif menu == "Visualización":
@@ -198,12 +199,7 @@ elif menu == "Visualización":
     st.plotly_chart(fig2)
     
 elif menu == "Mapa Principal":
-    # Slider de zoom encapsulado en formulario para que se actualice solo al presionar el botón
-    with st.sidebar.form(key="zoom_form"):
-        zoom_level = st.slider("Nivel de Zoom", 4, 15, 6)
-        submit_zoom = st.form_submit_button("Aplicar Zoom")
-    if not submit_zoom:
-        zoom_level = 6
+    zoom_level = st.sidebar.slider("Nivel de Zoom", 4, 15, 6)
     st.subheader("🌍 Mapa de Calor de Radiación Solar en Colombia")
     fig = px.scatter_mapbox(
         df_all, lat='LAT', lon='LON', color='ALLSKY_KT',
@@ -258,19 +254,12 @@ elif menu == "Mapas Climáticos":
         "Selecciona el tipo de mapa:", 
         ["Humedad", "Precipitación", "Temperatura"]
     )
-    # Slider de zoom específico para mapas climáticos
-    with st.sidebar.form(key="zoom_clima_form"):
-        zoom_clima = st.slider("Nivel de Zoom para Mapas Climáticos", 4, 15, 6)
-        submit_zoom_clima = st.form_submit_button("Aplicar Zoom")
-    if not submit_zoom_clima:
-        zoom_clima = 6
-
     if tipo_mapa == "Humedad":
-        mapa = crear_mapa_clima(df_humedad, "humedad", "Humedad", zoom=zoom_clima)
+        mapa = crear_mapa_clima(df_humedad, "humedad", "Humedad")
     elif tipo_mapa == "Precipitación":
-        mapa = crear_mapa_clima(df_precipitacion, "precipitacion", "Precipitación", zoom=zoom_clima)
+        mapa = crear_mapa_clima(df_precipitacion, "precipitacion", "Precipitación")
     elif tipo_mapa == "Temperatura":
-        mapa = crear_mapa_clima(df_temperatura, "temperatura", "Temperatura", zoom=zoom_clima)
+        mapa = crear_mapa_clima(df_temperatura, "temperatura", "Temperatura")
     
     if mapa:
         st_folium(mapa, width=700, height=400)
