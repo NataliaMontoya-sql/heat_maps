@@ -1,8 +1,8 @@
 branca
-pandas==1.5.3
-streamlit==1.24.0
-plotly==5.14.1
-folium==0.14.0
-seaborn==0.12.2
-matplotlib==3.6.3
-streamlit-folium==0.9.1
+pandas
+streamlit
+plotly
+folium
+seaborn
+matplotlib
+streamlit-folium
