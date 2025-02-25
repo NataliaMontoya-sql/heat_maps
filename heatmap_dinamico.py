@@ -1,125 +1,222 @@
-import streamlit as st
 import pandas as pd
+import streamlit as st
 import plotly.express as px
+import folium
+import seaborn as sns
+import matplotlib.pyplot as plt
+from streamlit_folium import st_folium
 
-# Configuración de la página
-st.set_page_config(layout="wide", page_title="Análisis Solar Colombia")
-st.title("🗺️ Mapa de Calor y Análisis Solar de Colombia")
+# Configuración de la página de Streamlit
+st.set_page_config(
+    page_title="Proyecto Solaris",
+    page_icon="☀️",
+    layout="wide"
+)
+st.title("Proyecto Solaris")
+st.sidebar.title("Opciones de Navegación")
 
-# =============================================
-# FUNCIONES DE PROCESAMIENTO Y CONFIGURACIÓN
-# =============================================
-
-def cargar_datos_ejemplo():
-    return pd.DataFrame({
-        'LAT': [6.2530, 4.6097, 3.4372, 10.3910],
-        'LON': [-75.5736, -74.0817, -76.5225, -72.9408],
-        'YEAR': [2020, 2021, 2022, 2023],
-        'MO': [1, 2, 3, 4],
-        'DY': [15, 20, 25, 30],
-        'ALLSKY_KT': [100, 80, 90, 85],
-        'ALLSKY_SFC_SW_DWN': [200, 180, 190, 185]
+# Función de carga de datos unificada
+@st.cache_data
+def cargar_datos():
+    df = pd.read_csv("datos_unificados (2).csv")
+    
+    # Renombrar columnas para consistencia
+    df = df.rename(columns={
+        "RH2M": "humedad",
+        "PRECTOTCORR": "precipitacion",
+        "T2M": "temperatura"
     })
-
-def filtrar_coordenadas(df):
-    df_filtrado = df[(df['LAT'].between(-4.23, 12.45)) & (df['LON'].between(-79.00, -66.87))].copy()
-    if df_filtrado.empty:
-        st.error("¡No hay coordenadas válidas dentro de Colombia!")
-        return None
-    registros_eliminados = len(df) - len(df_filtrado)
-    if registros_eliminados > 0:
-        st.warning(f"Se eliminaron {registros_eliminados} registros con coordenadas fuera de Colombia")
-    return df_filtrado
-
-def procesar_csv(uploaded_file):
-    try:
-        df = pd.read_csv(uploaded_file)
-        columnas_requeridas = {'LAT', 'LON', 'YEAR', 'MO', 'DY', 'ALLSKY_KT', 'ALLSKY_SFC_SW_DWN'}
-        if not columnas_requeridas.issubset(df.columns):
-            st.error("El CSV no contiene todas las columnas necesarias.")
-            return None
-        return filtrar_coordenadas(df)
-    except Exception as e:
-        st.error(f"Error al procesar el archivo: {e}")
-        return None
-
-def get_region(lat, lon):
-    if lat > 8:
-        return "Caribe"
-    elif lat < 2:
-        return "Sur"
-    elif lon < -75:
-        return "Pacífico"
-    return "Andina"
-
-def crear_mapa(df, zoom_level):
-    fig = px.scatter_mapbox(
-        df, lat='LAT', lon='LON', color='ALLSKY_KT',
-        size=[3]*len(df), hover_name='LAT', zoom=zoom_level,
-        color_continuous_scale='plasma', mapbox_style='open-street-map',
-        center={'lat': 4.5709, 'lon': -74.2973}
-    )
-    fig.update_traces(marker=dict(opacity=0.45))
-    fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0}, height=700)
-    return fig
-
-# =============================================
-# INTERFAZ DE USUARIO
-# =============================================
-
-with st.sidebar:
-    st.header("🌄 Panel de Control")
-    uploaded_file = st.file_uploader("📄 Subir archivo CSV", type=['csv'])
-    pagina_actual = st.radio("Navegación", ["🗺 Mapa Principal", "📊 Análisis Detallado", "📅 Comparativa Histórica", "📦 Datos"])
-    zoom_level = st.slider("Nivel de Zoom", 4, 15, 6)
-
-# =============================================
-# CARGA DE DATOS
-# =============================================
-
-df = procesar_csv(uploaded_file) if uploaded_file else cargar_datos_ejemplo()
-
-if df is not None:
+    
+    # Crear columna de fecha
+    df['Fecha'] = pd.to_datetime(df.astype(str).loc[:, ["YEAR", "MO", "DY"]].agg('-'.join, axis=1))
+    
+    # Clasificación de regiones
+    def get_region(lat, lon):
+        if lat > 8: return "Caribe"
+        if lat < 2: return "Sur"
+        if lon < -75: return "Pacífico"
+        return "Andina"
+    
     df['Region'] = df.apply(lambda x: get_region(x['LAT'], x['LON']), axis=1)
-
-# =============================================
-# PÁGINAS PRINCIPALES
-# =============================================
-
-if pagina_actual == "🗺 Mapa Principal" and df is not None:
-    st.plotly_chart(crear_mapa(df, zoom_level), use_container_width=True)
-
-elif pagina_actual == "📊 Análisis Detallado" and df is not None:
-    st.header("📈 Análisis Profundo de Datos")
-    top_zonas = df.nlargest(5, 'ALLSKY_SFC_SW_DWN')
-    st.subheader("Top 5 Zonas de Radiación")
-    st.dataframe(top_zonas.style.background_gradient(cmap='YlOrRd'))
-    region_avg = df.groupby('Region')['ALLSKY_SFC_SW_DWN'].mean()
-    st.bar_chart(region_avg)
-    df['Viabilidad'] = (df['ALLSKY_SFC_SW_DWN'] * 0.6 + df['ALLSKY_KT'] * 0.4)
-    top3 = df.nlargest(3, 'Viabilidad')
-    for i, (_, row) in enumerate(top3.iterrows()):
-        st.metric(f"🥇 Ubicación {i+1}", f"{row['Viabilidad']:.2f} pts", f"Lat: {row['LAT']:.4f} Lon: {row['LON']:.4f}")
-
-elif pagina_actual == "📅 Comparativa Histórica":
-    st.header("📆 Análisis Temporal")
     
-    st.subheader("Tendencia Anual")
-    df_anual = df.groupby('YEAR')[['ALLSKY_KT', 'ALLSKY_SFC_SW_DWN']].mean().reset_index()
-    fig_line = px.line(
-        df_anual, x='YEAR', y=['ALLSKY_KT', 'ALLSKY_SFC_SW_DWN'],
-        markers=True, labels={'value': 'Valor', 'variable': 'Indicador'}
+    return df
+
+df_all = cargar_datos()
+
+# Función para crear mapas climáticos mejorada
+def crear_mapa_clima(df, columna, titulo):
+    # Configuración de escalas por variable
+    escalas = {
+        "humedad": {"radio": 0.5, "color": "Blues"},
+        "precipitacion": {"radio": 0.01, "color": "Greens"},
+        "temperatura": {"radio": 1, "color": "Reds"},
+        "ALLSKY_KT": {"radio": 3, "color": "Oranges"}
+    }
+    
+    mapa = folium.Map(
+        location=[4.5709, -74.2973],  # Centro de Colombia
+        zoom_start=5,
+        tiles='CartoDB positron'
     )
-    st.plotly_chart(fig_line, use_container_width=True)
     
-elif pagina_actual == "📦 Datos":
-    st.header("📂 Conjunto de Datos Completo")
+    # Añadir capa de calor
+    heat_data = [[row['LAT'], row['LON'], row[columna]] for _, row in df.iterrows()]
+    folium.plugins.HeatMap(
+        heat_data,
+        radius=15,
+        gradient={0.4: 'blue', 0.6: 'lime', 0.8: 'orange', 1: 'red'},
+        blur=15
+    ).add_to(mapa)
     
-    if df is not None and not df.empty:
-        min_rad = st.slider("Radiación Mínima", float(df['ALLSKY_SFC_SW_DWN'].min()), float(df['ALLSKY_SFC_SW_DWN'].max()), 150.0)
-        max_kt = st.slider("Claridad Máxima", float(df['ALLSKY_KT'].min()), float(df['ALLSKY_KT'].max()), 95.0)
-        df_filtrado = df[(df['ALLSKY_SFC_SW_DWN'] >= min_rad) & (df['ALLSKY_KT'] <= max_kt)]
-        st.dataframe(df_filtrado)
-        st.download_button("📥 Exportar Datos", df_filtrado.to_csv(index=False), "datos_filtrados.csv", "text/csv")
-    else:
-        st.warning("No hay datos disponibles para mostrar.")
+    return mapa
+
+# Menú de navegación
+menu = st.sidebar.selectbox(
+    "Selecciona una opción:",
+    ["Inicio", "Datos", "Visualización", "Mapa Principal", 
+     "Mapas Climáticos", "Análisis Detallado", 
+     "Matriz de Correlación", "Percentiles"]
+)
+
+# Contenido de cada sección
+if menu == "Inicio":
+    st.subheader("¡Bienvenidos!")
+    st.markdown("""
+    **Objetivo del dashboard:**  
+    Identificar y visualizar las zonas de mayor potencial para la ubicación de parques solares en Colombia,
+    contribuyendo al desarrollo de energía limpia y sostenible.
+    
+    **Secciones disponibles:**
+    1. **Datos:** Visualización completa del dataset
+    2. **Visualización:** Análisis temporal por ubicación
+    3. **Mapa Principal:** Radiación solar a nivel nacional
+    4. **Mapas Climáticos:** Variables meteorológicas clave
+    5. **Análisis Detallado:** Comparación por regiones
+    6. **Matriz de Correlación:** Relaciones entre variables
+    7. **Percentiles:** Zonas de mayor potencial
+    """)
+
+elif menu == "Datos":
+    st.subheader("Datos Complejos")
+    with st.expander("Descripción de variables"):
+        st.markdown("""
+        - **ALLSKY_KT:** Índice de claridad del cielo
+        - **ALLSKY_SFC_SW_DWN:** Irradiación superficial
+        - **temperatura:** Temperatura a 2m (°C)
+        - **humedad:** Humedad relativa (%)
+        - **precipitacion:** Precipitación (mm/día)
+        """)
+    st.dataframe(df_all, use_container_width=True)
+
+elif menu == "Visualización":
+    st.subheader("Análisis Temporal por Ubicación")
+    col1, col2 = st.columns([1, 3])
+    
+    with col1:
+        año = st.selectbox("Seleccione el año", df_all["YEAR"].unique())
+        lat = st.selectbox("Latitud", df_all["LAT"].unique())
+        lon = st.selectbox("Longitud", df_all["LON"].unique())
+    
+    df_filtrado = df_all[
+        (df_all["YEAR"] == año) &
+        (df_all["LAT"] == lat) &
+        (df_all["LON"] == lon)
+    ]
+    
+    with col2:
+        fig = px.line(
+            df_filtrado,
+            x='Fecha',
+            y=['ALLSKY_KT', 'ALLSKY_SFC_SW_DWN'],
+            title=f"Comportamiento temporal en {lat}, {lon}",
+            labels={'value': 'Valor', 'variable': 'Indicador'},
+            height=500
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+elif menu == "Mapa Principal":
+    st.subheader("Potencial Solar por Ubicación")
+    zoom_level = st.sidebar.slider("Nivel de zoom", 4, 12, 6)
+    
+    fig = px.density_mapbox(
+        df_all,
+        lat='LAT',
+        lon='LON',
+        z='ALLSKY_KT',
+        radius=15,
+        zoom=zoom_level,
+        mapbox_style="carto-positron",
+        color_continuous_scale="hot",
+        range_color=[df_all['ALLSKY_KT'].quantile(0.1), df_all['ALLSKY_KT'].quantile(0.9)],
+        title="Densidad de Potencial Solar"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+elif menu == "Mapas Climáticos":
+    st.subheader("Variables Meteorológicas")
+    variable = st.selectbox(
+        "Seleccione variable",
+        ["humedad", "precipitacion", "temperatura", "ALLSKY_KT"]
+    )
+    
+    mapa = crear_mapa_clima(df_all, variable, variable.capitalize())
+    st_folium(mapa, width=1200, height=600)
+
+elif menu == "Análisis Detallado":
+    st.subheader("Comparación Regional")
+    
+    df_region = df_all.groupby('Region').agg({
+        'ALLSKY_KT': 'mean',
+        'temperatura': 'mean',
+        'precipitacion': 'mean'
+    }).reset_index()
+    
+    fig = px.bar(
+        df_region.melt(id_vars='Region'),
+        x='Region',
+        y='value',
+        color='variable',
+        barmode='group',
+        title="Indicadores Promedio por Región",
+        labels={'value': 'Valor Promedio'}
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+elif menu == "Matriz de Correlación":
+    st.subheader("Relaciones entre Variables")
+    
+    corr_matrix = df_all[[
+        'ALLSKY_KT',
+        'ALLSKY_SFC_SW_DWN',
+        'temperatura',
+        'humedad',
+        'precipitacion'
+    ]].corr()
+    
+    fig = px.imshow(
+        corr_matrix,
+        text_auto=True,
+        color_continuous_scale='RdBu',
+        range_color=[-1, 1],
+        title="Matriz de Correlación"
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+elif menu == "Percentiles":
+    st.subheader("Zonas de Alto Potencial")
+    
+    percentil = st.slider(
+        "Seleccione percentil",
+        min_value=70,
+        max_value=95,
+        value=85,
+        step=5
+    ) / 100
+    
+    threshold = df_all['ALLSKY_KT'].quantile(percentil)
+    df_top = df_all[df_all['ALLSKY_KT'] > threshold]
+    
+    st.map(df_top[['LAT', 'LON']], zoom=4)
+
+if __name__ == "__main__":
+    st.sidebar.info("Ejecuta la aplicación con: streamlit run nombre_del_script.py")
