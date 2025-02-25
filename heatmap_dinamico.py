@@ -5,6 +5,7 @@ import folium
 import seaborn as sns
 import matplotlib.pyplot as plt
 from streamlit_folium import st_folium
+from branca.element import Template, MacroElement
 
 # Configuración de la página de Streamlit
 st.set_page_config(
@@ -43,14 +44,14 @@ def cargar_datos():
 
 df_all = cargar_datos()
 
-# Función para crear mapas climáticos mejorada
+# Función para crear mapas climáticos mejorada con leyenda
 def crear_mapa_clima(df, columna, titulo):
     # Configuración de escalas por variable
     escalas = {
-        "humedad": {"radio": 0.5, "color": "Blues"},
-        "precipitacion": {"radio": 0.01, "color": "Greens"},
-        "temperatura": {"radio": 1, "color": "Reds"},
-        "ALLSKY_KT": {"radio": 3, "color": "Oranges"}
+        "humedad": {"min": 0, "max": 100, "color": "Blues", "unidad": "%"},
+        "precipitacion": {"min": 0, "max": df['precipitacion'].quantile(0.95), "color": "Greens", "unidad": "mm/día"},
+        "temperatura": {"min": df['temperatura'].min(), "max": df['temperatura'].max(), "color": "Reds", "unidad": "°C"},
+        "ALLSKY_KT": {"min": 0, "max": 1, "color": "Oranges", "unidad": "índice"}
     }
     
     mapa = folium.Map(
@@ -59,14 +60,50 @@ def crear_mapa_clima(df, columna, titulo):
         tiles='CartoDB positron'
     )
     
+    # Definir gradiente y título según la variable
+    escala = escalas.get(columna, {"min": 0, "max": 1, "color": "Blues", "unidad": ""})
+    titulo_completo = f"{titulo} ({escala['unidad']})"
+    
     # Añadir capa de calor
     heat_data = [[row['LAT'], row['LON'], row[columna]] for _, row in df.iterrows()]
     folium.plugins.HeatMap(
         heat_data,
         radius=15,
         gradient={0.4: 'blue', 0.6: 'lime', 0.8: 'orange', 1: 'red'},
-        blur=15
+        min_opacity=0.5,
+        blur=15,
+        max_val=escala['max']
     ).add_to(mapa)
+    
+    # Añadir leyenda
+    template = """
+    {% macro html(this, kwargs) %}
+    <div style='position: fixed; 
+        bottom: 50px; left: 50px; width: 200px; height: 120px; 
+        border:2px solid grey; z-index:9999; font-size:14px;
+        background-color: white; padding: 10px; border-radius: 5px;'>
+        
+        <p style="margin: 0; text-align: center; font-weight: bold;">{{ title }}</p>
+        <div style="display: flex; align-items: center; margin-top: 10px;">
+            <div style="background: linear-gradient(to right, blue, lime, orange, red); 
+                  width: 100%; height: 20px;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 5px;">
+            <span>{{ min_val }}</span>
+            <span>{{ max_val }}</span>
+        </div>
+    </div>
+    {% endmacro %}
+    """
+    
+    macro = MacroElement()
+    macro._template = Template(template)
+    macro.template_vars = {
+        'title': titulo_completo,
+        'min_val': f"{escala['min']:.1f}",
+        'max_val': f"{escala['max']:.1f}"
+    }
+    mapa.get_root().add_child(macro)
     
     return mapa
 
@@ -113,9 +150,9 @@ elif menu == "Visualización":
     col1, col2 = st.columns([1, 3])
     
     with col1:
-        año = st.selectbox("Seleccione el año", df_all["YEAR"].unique())
-        lat = st.selectbox("Latitud", df_all["LAT"].unique())
-        lon = st.selectbox("Longitud", df_all["LON"].unique())
+        año = st.selectbox("Seleccione el año", sorted(df_all["YEAR"].unique()))
+        lat = st.selectbox("Latitud", sorted(df_all["LAT"].unique()))
+        lon = st.selectbox("Longitud", sorted(df_all["LON"].unique()))
     
     df_filtrado = df_all[
         (df_all["YEAR"] == año) &
@@ -162,25 +199,50 @@ elif menu == "Mapas Climáticos":
     mapa = crear_mapa_clima(df_all, variable, variable.capitalize())
     st_folium(mapa, width=1200, height=600)
 
+    # Información adicional sobre la variable seleccionada
+    st.subheader(f"Información sobre {variable}")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Valor Promedio", f"{df_all[variable].mean():.2f}")
+    with col2:
+        st.metric("Valor Mínimo", f"{df_all[variable].min():.2f}")
+    with col3:
+        st.metric("Valor Máximo", f"{df_all[variable].max():.2f}")
+
 elif menu == "Análisis Detallado":
     st.subheader("Comparación Regional")
     
     df_region = df_all.groupby('Region').agg({
         'ALLSKY_KT': 'mean',
         'temperatura': 'mean',
-        'precipitacion': 'mean'
+        'precipitacion': 'mean',
+        'humedad': 'mean'
     }).reset_index()
     
-    fig = px.bar(
-        df_region.melt(id_vars='Region'),
-        x='Region',
-        y='value',
-        color='variable',
-        barmode='group',
-        title="Indicadores Promedio por Región",
-        labels={'value': 'Valor Promedio'}
+    # Añadir explicación
+    st.info("Este gráfico muestra los valores promedio de cada variable por región, ayudando a identificar las mejores ubicaciones para instalaciones solares.")
+    
+    # Permitir seleccionar qué variables mostrar
+    variables_mostrar = st.multiselect(
+        "Seleccione variables a comparar",
+        ["ALLSKY_KT", "temperatura", "precipitacion", "humedad"],
+        default=["ALLSKY_KT"]
     )
-    st.plotly_chart(fig, use_container_width=True)
+    
+    if variables_mostrar:
+        fig = px.bar(
+            df_region.melt(id_vars='Region', value_vars=variables_mostrar),
+            x='Region',
+            y='value',
+            color='variable',
+            barmode='group',
+            title="Indicadores Promedio por Región",
+            labels={'value': 'Valor Promedio', 'variable': 'Indicador'}
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("Por favor seleccione al menos una variable para mostrar")
 
 elif menu == "Matriz de Correlación":
     st.subheader("Relaciones entre Variables")
@@ -201,6 +263,13 @@ elif menu == "Matriz de Correlación":
         title="Matriz de Correlación"
     )
     st.plotly_chart(fig, use_container_width=True)
+    
+    st.markdown("""
+    **Interpretación de correlaciones:**
+    - **Valores cercanos a 1:** Correlación positiva fuerte (cuando una variable aumenta, la otra también)
+    - **Valores cercanos a -1:** Correlación negativa fuerte (cuando una variable aumenta, la otra disminuye)
+    - **Valores cercanos a 0:** Poca o ninguna correlación
+    """)
 
 elif menu == "Percentiles":
     st.subheader("Zonas de Alto Potencial")
@@ -216,7 +285,30 @@ elif menu == "Percentiles":
     threshold = df_all['ALLSKY_KT'].quantile(percentil)
     df_top = df_all[df_all['ALLSKY_KT'] > threshold]
     
-    st.map(df_top[['LAT', 'LON']], zoom=4)
+    # Añadir más información sobre las zonas de alto potencial
+    st.write(f"Se muestran ubicaciones con índice de claridad solar > {threshold:.3f} (percentil {percentil*100:.0f})")
+    
+    # Mostrar estadísticas por región para zonas de alto potencial
+    regiones_count = df_top.groupby('Region').size().reset_index(name='Conteo')
+    fig_regiones = px.pie(
+        regiones_count, 
+        values='Conteo', 
+        names='Region',
+        title="Distribución de zonas de alto potencial por región"
+    )
+    
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.map(df_top[['LAT', 'LON']], zoom=4)
+    with col2:
+        st.plotly_chart(fig_regiones, use_container_width=True)
 
+# Sección de información y ayuda
+st.sidebar.markdown("---")
+st.sidebar.info("""
+**Proyecto Solaris** - Análisis de potencial para energía solar en Colombia.
+""")
+
+# Aseguramos que el script se ejecute correctamente en Streamlit
 if __name__ == "__main__":
-    st.sidebar.info("Ejecuta la aplicación con: streamlit run nombre_del_script.py")
+    pass
