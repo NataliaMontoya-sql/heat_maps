@@ -131,7 +131,7 @@ if menu == "Datos":
 elif menu == "Inicio":
     st.subheader("🌅 Bienvenidos!")
     st.text("En este dashboard se identifica y visualiza las zonas de mayor potencial para la ubicación de parques solares en Colombia,")
-    st.text}("con el objetivo de impulsar el desarrollo de energía limpia y contribuir a un futuro sostenible.")
+    st.text("con el objetivo de impulsar el desarrollo de energía limpia y contribuir a un futuro sostenible.")
     st.markdown(""" 
     El dashboard se divide en las siguientes secciones:
         📄 Tabla de datos
