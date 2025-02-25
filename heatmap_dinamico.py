@@ -50,6 +50,7 @@ def agregar_leyenda(mapa, titulo, items):
     html = """
     {% macro html(this, kwargs) %}
     <div style="
+         color: black;
          position: fixed;
          bottom: 50px; left: 50px;
          width: 220px;
@@ -71,13 +72,13 @@ def agregar_leyenda(mapa, titulo, items):
     macro._template = template
     mapa.get_root().add_child(macro)
 
-# Función para crear mapas climáticos con leyenda
-def crear_mapa_clima(df, columna, titulo):
+# Modificamos la función para recibir un parámetro de zoom
+def crear_mapa_clima(df, columna, titulo, zoom=6):
     q75 = df[columna].quantile(0.75)
     q50 = df[columna].quantile(0.5)
     max_row = df.loc[df[columna].idxmax()]
     map_center = [max_row["LAT"], max_row["LON"]]
-    mapa = folium.Map(location=map_center, zoom_start=6)
+    mapa = folium.Map(location=map_center, zoom_start=zoom)
     
     for _, row in df.iterrows():
         valor = row[columna]
@@ -197,7 +198,12 @@ elif menu == "Visualización":
     st.plotly_chart(fig2)
     
 elif menu == "Mapa Principal":
-    zoom_level = st.sidebar.slider("Nivel de Zoom", 4, 15, 6)
+    # Slider de zoom encapsulado en formulario para que se actualice solo al presionar el botón
+    with st.sidebar.form(key="zoom_form"):
+        zoom_level = st.slider("Nivel de Zoom", 4, 15, 6)
+        submit_zoom = st.form_submit_button("Aplicar Zoom")
+    if not submit_zoom:
+        zoom_level = 6
     st.subheader("🌍 Mapa de Calor de Radiación Solar en Colombia")
     fig = px.scatter_mapbox(
         df_all, lat='LAT', lon='LON', color='ALLSKY_KT',
@@ -252,12 +258,19 @@ elif menu == "Mapas Climáticos":
         "Selecciona el tipo de mapa:", 
         ["Humedad", "Precipitación", "Temperatura"]
     )
+    # Slider de zoom específico para mapas climáticos
+    with st.sidebar.form(key="zoom_clima_form"):
+        zoom_clima = st.slider("Nivel de Zoom para Mapas Climáticos", 4, 15, 6)
+        submit_zoom_clima = st.form_submit_button("Aplicar Zoom")
+    if not submit_zoom_clima:
+        zoom_clima = 6
+
     if tipo_mapa == "Humedad":
-        mapa = crear_mapa_clima(df_humedad, "humedad", "Humedad")
+        mapa = crear_mapa_clima(df_humedad, "humedad", "Humedad", zoom=zoom_clima)
     elif tipo_mapa == "Precipitación":
-        mapa = crear_mapa_clima(df_precipitacion, "precipitacion", "Precipitación")
+        mapa = crear_mapa_clima(df_precipitacion, "precipitacion", "Precipitación", zoom=zoom_clima)
     elif tipo_mapa == "Temperatura":
-        mapa = crear_mapa_clima(df_temperatura, "temperatura", "Temperatura")
+        mapa = crear_mapa_clima(df_temperatura, "temperatura", "Temperatura", zoom=zoom_clima)
     
     if mapa:
         st_folium(mapa, width=700, height=400)
