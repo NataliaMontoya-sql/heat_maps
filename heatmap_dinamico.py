@@ -5,65 +5,73 @@ import folium
 import seaborn as sns
 import matplotlib.pyplot as plt
 from streamlit_folium import st_folium
-from branca.element import Template, MacroElement
 
-# Configuración de la página
+# Configuración de la página de Streamlit
 st.set_page_config(page_title="Proyecto Solaris", page_icon="", layout="wide")
 st.title("Proyecto Solaris")
 st.sidebar.title("Opciones de Navegación")
 
-st.sidebar.subheader("Carga de archivos CSV")
-# Subida de archivos
-uploaded_datos = st.sidebar.file_uploader("Sube datos unificados", type=["csv"])
-uploaded_humedad = st.sidebar.file_uploader("Sube datos de humedad", type=["csv"])
-uploaded_precipitacion = st.sidebar.file_uploader("Sube datos de precipitación", type=["csv"])
-uploaded_temperatura = st.sidebar.file_uploader("Sube datos de temperatura", type=["csv"])
-
-# Función para cargar datos a partir de un file uploader
+# Funciones de carga de datos
 @st.cache_data
-def cargar_csv(file) -> pd.DataFrame:
-    return pd.read_csv(file)
+def cargar_humedad():
+    df = pd.read_csv("datos_agrupados_humedity.csv")
+    df = df.rename(columns={"RH2M": "humedad"})
+    return df
 
-# Variables de datos
-if uploaded_datos is not None:
-    df_all = cargar_csv(uploaded_datos)
-    # Crear columna Fecha
-    df_all['Fecha'] = pd.to_datetime(
-        df_all.astype(str).loc[:, ["YEAR", "MO", "DY"]].agg('-'.join, axis=1)
-    )
-else:
-    st.warning("Sube el archivo de datos unificados")
-    df_all = None
+@st.cache_data
+def cargar_precipitacion():
+    df = pd.read_csv("datos_agrupados_precipitacion.csv")
+    df = df.rename(columns={"PRECTOTCORR": "precipitacion"})
+    return df
 
-if uploaded_humedad is not None:
-    df_humedad = cargar_csv(uploaded_humedad)
-    df_humedad = df_humedad.rename(columns={"RH2M": "humedad"})
-else:
-    st.warning("Sube el archivo de datos de humedad")
-    df_humedad = None
+@st.cache_data
+def cargar_temperatura():
+    df = pd.read_csv("datos_agrupados_temperature1.csv")
+    df = df.rename(columns={"T2M": "temperatura"})
+    return df
 
-if uploaded_precipitacion is not None:
-    df_precipitacion = cargar_csv(uploaded_precipitacion)
-    df_precipitacion = df_precipitacion.rename(columns={"PRECTOTCORR": "precipitacion"})
-else:
-    st.warning("Sube el archivo de datos de precipitación")
-    df_precipitacion = None
+df_humedad = cargar_humedad()
+df_precipitacion = cargar_precipitacion()
+df_temperatura = cargar_temperatura()
 
-if uploaded_temperatura is not None:
-    df_temperatura = cargar_csv(uploaded_temperatura)
-    df_temperatura = df_temperatura.rename(columns={"T2M": "temperatura"})
-else:
-    st.warning("Sube el archivo de datos de temperatura")
-    df_temperatura = None
+@st.cache_data
+def cargar_datos():
+    return pd.read_csv("datos_unificados (2).csv")
+df_all = cargar_datos()
 
-# Función para crear mapas climáticos con leyenda personalizada
+# Crear columna 'Fecha' combinando 'YEAR', 'MO', 'DY'
+df_all['Fecha'] = pd.to_datetime(df_all.astype(str).loc[:, ["YEAR", "MO", "DY"]].agg('-'.join, axis=1))
+
+# Función para agregar leyenda a un mapa Folium
+def agregar_leyenda(mapa, titulo, items):
+    """
+    Agrega una leyenda personalizada al mapa.
+    Parámetros:
+        mapa: objeto folium.Map
+        titulo: título de la leyenda
+        items: lista de tuplas (color, descripción)
+    """
+    legend_html = f'''
+     <div style="
+         position: fixed; 
+         bottom: 50px; left: 50px; width: 220px; height: {40 + 30 * len(items)}px; 
+         background-color: white; z-index:9999; font-size:14px; 
+         border:2px solid grey; padding: 10px;
+         ">
+         <b>{titulo}</b><br>
+    '''
+    for color, descripcion in items:
+        legend_html += f'<i style="background:{color};width:10px;height:10px;display:inline-block;margin-right:5px;border-radius:50%;"></i>{descripcion}<br>'
+    legend_html += '</div>'
+    mapa.get_root().html.add_child(folium.Element(legend_html))
+
+# Función para crear mapas climáticos con leyenda
 def crear_mapa_clima(df, columna, titulo):
+    q75 = df[columna].quantile(0.75)
+    q50 = df[columna].quantile(0.5)
     max_row = df.loc[df[columna].idxmax()]
     map_center = [max_row["LAT"], max_row["LON"]]
     mapa = folium.Map(location=map_center, zoom_start=6)
-    
-    q75 = df[columna].quantile(0.75)
-    q50 = df[columna].quantile(0.50)
     
     for _, row in df.iterrows():
         valor = row[columna]
@@ -73,7 +81,6 @@ def crear_mapa_clima(df, columna, titulo):
             color = 'orange'
         else:
             color = 'red'
-        
         folium.CircleMarker(
             location=[row['LAT'], row['LON']],
             radius=valor * 0.1,
@@ -83,224 +90,188 @@ def crear_mapa_clima(df, columna, titulo):
             fill_opacity=0.6,
             popup=f"{titulo}: {valor:.2f}"
         ).add_to(mapa)
-    
-    # Crear leyenda personalizada
-    legend_html = f"""
-     {% macro html(this, kwargs) %}
-     <div style="
-         position: fixed; 
-         bottom: 50px; left: 50px; width: 220px; height: 120px; 
-         border:2px solid grey; z-index:9999; font-size:14px;
-         background-color: white;
-         opacity: 0.8;
-         padding: 10px;
-         ">
-         <b>Leyenda</b><br>
-         <i class="fa fa-circle" style="color:red"></i>&nbsp; Valor <= {q50:.2f}<br>
-         <i class="fa fa-circle" style="color:orange"></i>&nbsp; {q50:.2f} < Valor <= {q75:.2f}<br>
-         <i class="fa fa-circle" style="color:green"></i>&nbsp; Valor > {q75:.2f}
-     </div>
-     {% endmacro %}
-    """
-    macro = MacroElement()
-    macro._template = Template(legend_html)
-    mapa.get_root().add_child(macro)
-    
+        
+    # Agregar leyenda al mapa
+    leyenda_items = [
+        ("green", "Mayor al 75%"),
+        ("orange", "Entre 50% y 75%"),
+        ("red", "Menor o igual al 50%")
+    ]
+    agregar_leyenda(mapa, f"Leyenda {titulo}", leyenda_items)
     return mapa
 
-# Verificar que df_all esté cargado para continuar
-if df_all is not None:
-    # Agregar columna de Region
-    def get_region(lat, lon):
-        if lat > 8:
-            return "Caribe"
-        elif lat < 2:
-            return "Sur"
-        elif lon < -75:
-            return "Pacífico"
-        return "Andina"
-    
-    df_all['Region'] = df_all.apply(lambda x: get_region(x['LAT'], x['LON']), axis=1)
+# Menú de navegación en la barra lateral
+menu = st.sidebar.selectbox("Selecciona una opción:", ["Inicio", "Datos", "Visualización", "Mapa Principal", "Mapas Climáticos", "Análisis Detallado", "Matriz de Correlación", "Percentiles"])
 
-# Menú de navegación
-menu = st.sidebar.selectbox("Selecciona una opción:", [
-    "Inicio", "Datos", "Visualización", "Mapa Principal", 
-    "Mapas Climáticos", "Análisis Detallado", "Matriz de Correlación", "Percentiles"
-])
+def get_region(lat, lon):
+    if lat > 8: 
+        return "Caribe"
+    elif lat < 2: 
+        return "Sur"
+    elif lon < -75: 
+        return "Pacífico"
+    return "Andina"
+
+df_all['Region'] = df_all.apply(lambda x: get_region(x['LAT'], x['LON']), axis=1)
 
 if menu == "Datos":
     st.subheader("Datos Disponibles")
-    if df_all is not None:
-        st.dataframe(df_all)
-    else:
-        st.error("Sube el archivo de datos unificados.")
-
+    st.dataframe(df_all.head(100))
 elif menu == "Inicio":
     st.subheader("¡Bienvenidos!")
-    st.text("Dashboard para analizar zonas de potencial para parques solares en Colombia.")
-    st.markdown("""
-    El dashboard se divide en:
+    st.text("En este dashboard se identifica y visualiza las zonas de mayor potencial para la ubicación de parques solares en Colombia, con el objetivo de impulsar el desarrollo de energía limpia y contribuir a un futuro sostenible.")
+    st.markdown(""" 
+    El dashboard se divide en las siguientes secciones:
     - Tabla de datos
-    - Mapas interactivos
-    - Análisis visual y estadístico
+    - Valores por ubicación en el mapa
+    - Mapa de irradiación
+    - Mapas de datos climáticos
+    - Diagrama de barras de zonas geográficas
+    - Matriz de correlación de las variables
+    - Mapa con percentiles de irradiación
     """)
-
+    
 elif menu == "Visualización":
-    st.subheader("Visualización de Datos Climáticos")
-    if df_all is not None:
-        año = st.sidebar.selectbox("Selecciona el año", df_all["YEAR"].unique())
-        df_filtrado = df_all[df_all["YEAR"] == año]
-        st.write(f"Mostrando datos para el año: {año}")
-        
-        fechas = st.sidebar.date_input(
-            "Selecciona el rango de fechas:",
-            [df_filtrado["Fecha"].min(), df_filtrado["Fecha"].max()]
-        )
-        if len(fechas) == 2:
-            fecha_inicio, fecha_fin = fechas
-            df_filtrado = df_filtrado[(df_filtrado["Fecha"] >= pd.to_datetime(fecha_inicio)) & 
-                                      (df_filtrado["Fecha"] <= pd.to_datetime(fecha_fin))]
-        
-        latitudes_disponibles = df_filtrado["LAT"].unique()
-        longitudes_disponibles = df_filtrado["LON"].unique()
-        
-        lat = st.sidebar.selectbox("Selecciona la latitud", latitudes_disponibles)
-        lon = st.sidebar.selectbox("Selecciona la longitud", longitudes_disponibles)
-        
-        df_filtrado_lat_lon = df_filtrado[(df_filtrado["LAT"] == lat) & (df_filtrado["LON"] == lon)]
-        
-        mapa = folium.Map(location=[lat, lon], zoom_start=10)
-        folium.Marker(
-            location=[lat, lon],
-            popup=f"Lat: {lat}, Lon: {lon}",
-            icon=folium.Icon(color="blue")
-        ).add_to(mapa)
-        st.subheader("Mapa de Ubicación")
-        st_folium(mapa, width=700, height=400)
-        
-        fig = px.line(
-            df_filtrado_lat_lon,
-            x="Fecha",
-            y=["ALLSKY_KT"],
-            title=f"Irradiancia en Lat: {lat} y Lon: {lon} para el año {año}",
-            template="plotly_dark"
-        )
-        st.plotly_chart(fig)
-    else:
-        st.error("Sube el archivo de datos unificados.")
-
+    st.subheader("📊 Visualización datos climáticos")
+    año = st.sidebar.selectbox("Selecciona el año", df_all["YEAR"].unique())
+    df_filtrado = df_all[df_all["YEAR"] == año]
+    st.write(f"Mostrando datos para el año: {año}")
+    
+    fecha_inicio, fecha_fin = st.sidebar.date_input(
+        "Selecciona el rango de fechas:",
+        [df_filtrado["Fecha"].min(), df_filtrado["Fecha"].max()]
+    )
+    df_filtrado = df_filtrado[(df_filtrado["Fecha"] >= pd.to_datetime(fecha_inicio)) & (df_filtrado["Fecha"] <= pd.to_datetime(fecha_fin))]
+    
+    latitudes_disponibles = df_filtrado["LAT"].unique()
+    longitudes_disponibles = df_filtrado["LON"].unique()
+    
+    lat = st.sidebar.selectbox("Selecciona la latitud", latitudes_disponibles)
+    lon = st.sidebar.selectbox("Selecciona la longitud", longitudes_disponibles)
+    
+    df_filtrado_lat_lon = df_filtrado[(df_filtrado["LAT"] == lat) & (df_filtrado["LON"] == lon)]
+    mapa = folium.Map(location=[lat, lon], zoom_start=10)
+    folium.Marker(
+        location=[lat, lon],
+        popup=f"Lat: {lat}, Lon: {lon}",
+        icon=folium.Icon(color="blue")
+    ).add_to(mapa)
+    
+    st.subheader("🌍 Mapa de Ubicación")
+    st_folium(mapa, width=700, height=400)
+    
+    fig = px.line(
+        df_filtrado_lat_lon,
+        x="Fecha",
+        y=["ALLSKY_KT"],
+        title=f"All Sky Surface Shortwave Downward Irradiance (kW/m²/day) en Lat: {lat} y Lon: {lon} en el año {año}",
+        labels={"Fecha": "Fecha", "value": "Valor", "variable": "Variable"},
+        line_shape='linear',
+        template="plotly_dark"
+    )
+    fig.update_traces(line=dict(color='red'))
+    st.plotly_chart(fig)
+    
+    fig2 = px.line(
+        df_filtrado_lat_lon,
+        x="Fecha",
+        y=["ALLSKY_SFC_SW_DWN"],
+        title=f"All Sky Insolation Clearness Index en Lat: {lat} y Lon: {lon} en el año {año}",
+        labels={"Fecha": "Fecha", "value": "Valor", "variable": "Variable"},
+        line_shape='linear',
+        template="plotly_dark"
+    )
+    st.plotly_chart(fig2)
+    
 elif menu == "Mapa Principal":
-    st.subheader("Mapa de Calor de Radiación Solar")
-    if df_all is not None:
-        zoom_level = st.sidebar.slider("Nivel de Zoom", 4, 15, 6)
-        fig = px.scatter_mapbox(
-            df_all, lat='LAT', lon='LON', color='ALLSKY_KT',
-            size=[3]*len(df_all), hover_name='LAT', zoom=zoom_level,
-            color_continuous_scale='plasma', mapbox_style='open-street-map',
-            center={'lat': 4.5709, 'lon': -74.2973},
-            opacity=0.15
-        )
-        fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, height=700)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.error("Sube el archivo de datos unificados.")
-
+    zoom_level = st.sidebar.slider("Nivel de Zoom", 4, 15, 6)
+    st.subheader("🌍 Mapa de Calor de Radiación Solar en Colombia")
+    fig = px.scatter_mapbox(
+        df_all, lat='LAT', lon='LON', color='ALLSKY_KT',
+        size=[3]*len(df_all), hover_name='LAT', zoom=zoom_level,
+        color_continuous_scale='plasma', mapbox_style='open-street-map',
+        center={'lat': 4.5709, 'lon': -74.2973},
+        opacity=0.15
+    )
+    fig.update_layout(margin={"r": 0, "t": 0, "l": 0, "b": 0}, height=700)
+    st.plotly_chart(fig, use_container_width=True)
+    
 elif menu == "Análisis Detallado":
-    st.subheader("Análisis de Datos Climáticos")
-    if df_all is not None:
-        region_avg = df_all.groupby('Region')['ALLSKY_SFC_SW_DWN'].mean()
-        st.bar_chart(region_avg)
-        df_all['Viabilidad'] = (df_all['ALLSKY_SFC_SW_DWN'] * 0.6 + df_all['ALLSKY_KT'] * 0.4)
-        top3 = df_all.nlargest(3, 'Viabilidad')
-        for i, (_, row) in enumerate(top3.iterrows()):
-            st.metric(f"Ubicación {i+1}", f"{row['Viabilidad']:.2f} pts", f"Lat: {row['LAT']:.4f} Lon: {row['LON']:.4f}")
-    else:
-        st.error("Sube el archivo de datos unificados.")
-
+    st.subheader("📈 Análisis de Datos Climáticos")
+    region_avg = df_all.groupby('Region')['ALLSKY_SFC_SW_DWN'].mean()
+    st.bar_chart(region_avg)
+    df_all['Viabilidad'] = (df_all['ALLSKY_SFC_SW_DWN'] * 0.6 + df_all['ALLSKY_KT'] * 0.4)
+    top3 = df_all.nlargest(3, 'Viabilidad')
+    for i, (_, row) in enumerate(top3.iterrows()):
+        st.metric(f"🥇 Ubicación {i+1}", f"{row['Viabilidad']:.2f} pts", f"Lat: {row['LAT']:.4f} Lon: {row['LON']:.4f}")
+    
 elif menu == "Matriz de Correlación":
-    st.subheader("Matriz de Correlación")
-    uploaded_corr = st.sidebar.file_uploader("Sube datos para la correlación", type=["csv"])
-    if uploaded_corr is not None:
-        df_corr = cargar_csv(uploaded_corr)
-        df_corr = df_corr.rename(columns={
-            "RH2M": "Humedad relativa", 
-            "T2M": "Temperatura", 
-            "ALLSKY_SFC_SW_DWN": "Índice de claridad", 
-            "ALLSKY_KT": "Irradiancia solar", 
-            "PRECTOTCORR": "Precipitacion"
-        })
-        columnas_deseadas = ["Irradiancia solar", "Índice de claridad", "Temperatura", "Humedad relativa", "Precipitacion"]
-        df_seleccionado = df_corr[columnas_deseadas]
-        matriz_correlacion = df_seleccionado.corr()
-        plt.figure(figsize=(10,8))
-        sns.heatmap(matriz_correlacion, annot=True, cmap='coolwarm', fmt=".2f", linewidths=.5)
-        plt.title('Matriz de Correlación')
-        st.pyplot(plt)
-    else:
-        st.error("Sube el archivo de datos para la correlación.")
-
+    st.subheader("Matriz de Correlación de Variables Climáticas")
+    df_corr = pd.read_csv("datos_unificados_all.csv")
+    df = df_corr.rename(columns={"RH2M": "Humedad relativa", "T2M": "Temperatura", "ALLSKY_SFC_SW_DWN": "Indice de claridad", "ALLSKY_KT": "Irradiancia solar", "PRECTOTCORR": "Precipitacion"})
+    columnas_deseadas = ["Irradiancia solar", "Indice de claridad", "Temperatura", "Humedad relativa", "Precipitacion"]
+    df_seleccionado = df[columnas_deseadas]
+    matriz_correlacion = df_seleccionado.corr()
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(matriz_correlacion, annot=True, cmap='coolwarm', fmt=".2f", linewidths=.5)
+    plt.title('Matriz de Correlación')
+    st.pyplot(plt)
+    
 elif menu == "Mapas Climáticos":
     st.subheader("Mapas de Humedad, Precipitación y Temperatura")
     tipo_mapa = st.selectbox("Selecciona el tipo de mapa:", ["Humedad", "Precipitación", "Temperatura"])
-    mapa = None
     if tipo_mapa == "Humedad":
-        if df_humedad is not None:
-            mapa = crear_mapa_clima(df_humedad, "humedad", "Humedad")
-        else:
-            st.error("Sube el archivo de datos de humedad.")
+        mapa = crear_mapa_clima(df_humedad, "humedad", "Humedad")
     elif tipo_mapa == "Precipitación":
-        if df_precipitacion is not None:
-            mapa = crear_mapa_clima(df_precipitacion, "precipitacion", "Precipitación")
-        else:
-            st.error("Sube el archivo de datos de precipitación.")
+        mapa = crear_mapa_clima(df_precipitacion, "precipitacion", "Precipitación")
     elif tipo_mapa == "Temperatura":
-        if df_temperatura is not None:
-            mapa = crear_mapa_clima(df_temperatura, "temperatura", "Temperatura")
-        else:
-            st.error("Sube el archivo de datos de temperatura.")
+        mapa = crear_mapa_clima(df_temperatura, "temperatura", "Temperatura")
+    
     if mapa:
         st_folium(mapa, width=700, height=400)
-
+    
 elif menu == "Percentiles":
-    st.subheader("Mapa con percentiles de irradiación")
-    if df_all is not None:
-        percentil_seleccionado = st.sidebar.radio("Selecciona el percentil:", ["75", "50"], index=0)
-        percentil_valor = 0.75 if percentil_seleccionado == "75" else 0.50
-
-        df_promedio = df_all.groupby(['LAT', 'LON'])['ALLSKY_KT'].mean().reset_index()
-        percentil = df_all['ALLSKY_KT'].quantile(percentil_valor)
-        df_puntos_altos = df_promedio[df_promedio['ALLSKY_KT'] > percentil]
-        df_puntos_bajos = df_promedio[df_promedio['ALLSKY_KT'] <= percentil]
-
-        mapa = folium.Map(location=[df_promedio['LAT'].mean(), df_promedio['LON'].mean()], zoom_start=6)
-
-        for _, row in df_puntos_altos.iterrows():
-            folium.CircleMarker(
-                location=[row['LAT'], row['LON']],
-                radius=8,
-                color="red",
-                fill=True,
-                fill_color="red",
-                fill_opacity=0.6,
-                popup=f"Lat: {row['LAT']} - Lon: {row['LON']}<br>Promedio ALLSKY_KT: {row['ALLSKY_KT']:.2f}"
-            ).add_to(mapa)
-
-        for _, row in df_puntos_bajos.iterrows():
-            radius = 4 + (row['ALLSKY_KT'] / df_promedio['ALLSKY_KT'].max()) * 10
-            folium.CircleMarker(
-                location=[row['LAT'], row['LON']],
-                radius=radius,
-                color="blue",
-                fill=True,
-                fill_color="blue",
-                fill_opacity=0.6,
-                popup=f"Lat: {row['LAT']} - Lon: {row['LON']}<br>Promedio ALLSKY_KT: {row['ALLSKY_KT']:.2f}"
-            ).add_to(mapa)
-
-        st.subheader(f"Mapa de puntos mayores y menores al Percentil {percentil_seleccionado}")
-        st_folium(mapa, width=700, height=400)
-    else:
-        st.error("Sube el archivo de datos unificados.")
+    st.subheader("📊 Mapa con los valores más altos de All Sky Surface Shortwave Downward Irradiance")
+    percentil_seleccionado = st.sidebar.radio("Selecciona el percentil:", ["75", "50"], index=0)
+    percentil_valor = 0.75 if percentil_seleccionado == "75" else 0.50
+    df_promedio = df_all.groupby(['LAT', 'LON'])['ALLSKY_KT'].mean().reset_index()
+    percentil = df_all['ALLSKY_KT'].quantile(percentil_valor)
+    df_puntos_altos = df_promedio[df_promedio['ALLSKY_KT'] > percentil]
+    df_puntos_bajos = df_promedio[df_promedio['ALLSKY_KT'] <= percentil]
+    mapa = folium.Map(location=[df_promedio['LAT'].mean(), df_promedio['LON'].mean()], zoom_start=6)
+    
+    for _, row in df_puntos_altos.iterrows():
+        folium.CircleMarker(
+            location=[row['LAT'], row['LON']],
+            radius=8,
+            color="red",
+            fill=True,
+            fill_color="red",
+            fill_opacity=0.6,
+            popup=f"Lat: {row['LAT']} - Lon: {row['LON']}<br>Promedio ALLSKY_KT: {row['ALLSKY_KT']:.2f}"
+        ).add_to(mapa)
+        
+    for _, row in df_puntos_bajos.iterrows():
+        radius = 4 + (row['ALLSKY_KT'] / df_promedio['ALLSKY_KT'].max()) * 10
+        folium.CircleMarker(
+            location=[row['LAT'], row['LON']],
+            radius=radius,
+            color="blue",
+            fill=True,
+            fill_color="blue",
+            fill_opacity=0.6,
+            popup=f"Lat: {row['LAT']} - Lon: {row['LON']}<br>Promedio ALLSKY_KT: {row['ALLSKY_KT']:.2f}"
+        ).add_to(mapa)
+        
+    # Agregar leyenda al mapa de percentiles
+    leyenda_items = [
+        ("red", "ALLSKY_KT > Percentil"),
+        ("blue", "ALLSKY_KT <= Percentil")
+    ]
+    agregar_leyenda(mapa, "Leyenda Percentiles", leyenda_items)
+    
+    st.subheader(f"🌍 Mapa de Puntos Mayores y Menores al Percentil {percentil_seleccionado}")
+    st_folium(mapa, width=700, height=400)
 
 if __name__ == "__main__":
-    st.sidebar.info("Ejecuta este script con: streamlit run nombre_del_script.py")
+    st.sidebar.info("Ejecuta este script con: streamlit run entrenamiento_app.py")
