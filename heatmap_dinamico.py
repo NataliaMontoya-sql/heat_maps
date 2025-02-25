@@ -4,7 +4,7 @@ import plotly.express as px
 import folium
 import seaborn as sns
 import matplotlib.pyplot as plt
-from streamlit-folium import st-folium
+from streamlit_folium import st_folium
 from branca.element import Template, MacroElement
 
 # Configuración de la página de Streamlit
