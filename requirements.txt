@@ -1,8 +1,6 @@
-streamlit
 pandas
+streamlit
 plotly
 folium
-numpy
-datetime
-kaleido
+seaborn
 matplotlib
